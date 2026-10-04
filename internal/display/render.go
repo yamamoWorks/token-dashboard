@@ -21,11 +21,6 @@ import (
 	"token-monitor-turzx/internal/usage"
 )
 
-const (
-	Width  = 1920
-	Height = 462
-)
-
 var (
 	background = color.RGBA{0x0f, 0x11, 0x17, 0xff}
 	divider    = color.RGBA{0x2a, 0x2f, 0x3a, 0xff}
@@ -40,6 +35,7 @@ type Renderer struct {
 	medium, bold *opentype.Font
 	faces        map[faceKey]font.Face
 	icons        map[string]image.Image
+	layout       Layout
 }
 
 type faceKey struct {
@@ -48,6 +44,14 @@ type faceKey struct {
 }
 
 func NewRenderer() (*Renderer, error) {
+	return NewRendererWithLayout(UltraWideLayout{})
+}
+
+// NewRendererWithLayout creates a renderer for the selected display profile.
+func NewRendererWithLayout(layout Layout) (*Renderer, error) {
+	if layout == nil {
+		return nil, fmt.Errorf("display layout is required")
+	}
 	dir := filepath.Join(os.Getenv("WINDIR"), "Fonts")
 	medium, err := loadFont(filepath.Join(dir, "YuGothM.ttc"))
 	if err != nil {
@@ -57,7 +61,12 @@ func NewRenderer() (*Renderer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Renderer{medium: medium, bold: bold, faces: map[faceKey]font.Face{}, icons: loadIcons()}, nil
+	return &Renderer{medium: medium, bold: bold, faces: map[faceKey]font.Face{}, icons: loadIcons(), layout: layout}, nil
+}
+
+// Size returns the logical resolution owned by the active layout.
+func (r *Renderer) Size() image.Point {
+	return r.layout.Size()
 }
 
 // loadFont returns the first face of a collection: Yu Gothic Medium or Bold.
@@ -75,25 +84,7 @@ func loadFont(path string) (*opentype.Font, error) {
 
 // Render draws stats as of now. Nil stats means the selected source has no data yet.
 func (r *Renderer) Render(stats *usage.Stats, now time.Time, source string, style Style) *image.RGBA {
-	img := image.NewRGBA(image.Rect(0, 0, Width, Height))
-	draw.Draw(img, img.Bounds(), image.NewUniform(background), image.Point{}, draw.Src)
-	if stats == nil {
-		face := r.face(false, 64)
-		label := "Waiting for Hub"
-		if source == "Local" {
-			label = "Waiting for local usage"
-		}
-		r.text(img, face, dim, (Width-measure(face, label))/2, Height/2+22, label)
-		return img
-	}
-	// Gauges use the whole width for Usage Limits and leave Tokens out.
-	if style == Bars {
-		r.tokens(img, stats.Periods)
-		r.limits(img, stats.Limits, now)
-	} else {
-		r.gauges(img, stats, now)
-	}
-	return img
+	return r.layout.Render(r, stats, now, source, style)
 }
 
 // tokensRight is the right edge of the Tokens column at the left of the image.
