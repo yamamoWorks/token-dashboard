@@ -66,14 +66,20 @@ export function DisplaySettings() {
   const draft = useSettingsDraft();
   if (!draft) return null;
   const displays = draft.saved.displays ?? [];
-  const options = [
+  const displayOptions = [
     { value: automatic, label: 'Automatic' },
     ...displays.map(d => ({ value: d.deviceID, label: d.connected ? d.name : `${d.name} (Disconnected)` })),
   ];
+  const profileOptions = (draft.saved.displayProfiles ?? []).map(profile => ({ value: profile.id, label: profile.name }));
   return <Stack gap={4} align="flex-end">
     <Group wrap="nowrap" gap="sm">
+      <Title order={5}>Profile</Title>
+      <Select w={280} aria-label="Display profile" data={profileOptions} value={draft.profile} allowDeselect={false} error={draft.fields.displayProfileID}
+        onChange={value => { if (value) draft.setProfile(value); }} />
+    </Group>
+    <Group wrap="nowrap" gap="sm">
       <Title order={5}>Output</Title>
-      <Select w={280} aria-label="Output device" data={options} value={draft.display} allowDeselect={false} error={draft.fields.displayID}
+      <Select w={280} aria-label="Output device" data={displayOptions} value={draft.display} allowDeselect={false} error={draft.fields.displayID}
         onChange={value => { if (value) draft.setDisplay(value); }} />
     </Group>
     {displays.length === 0 && <Text size="xs" c="dimmed">No TURZX display is connected.</Text>}
