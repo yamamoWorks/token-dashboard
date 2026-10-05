@@ -170,7 +170,10 @@ func run() error {
 		sink = output.Submit
 	}
 	settingsService.OnStyleSaved = usageState.Touch
-	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
+	settingsService.OnProfileSaved = usageState.Touch
+	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(),
+		func() display.DisplayProfile { return settings.SelectedDisplayProfile(settingsService) },
+		func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
 		select {
@@ -202,7 +205,7 @@ func run() error {
 			})
 		}
 		menu := application.NewMenu()
-		update :=menu.Add("").SetHidden(true)
+		update := menu.Add("").SetHidden(true)
 		menu.Add("Open").OnClick(func(*application.Context) { show() })
 		menu.AddSeparator()
 		menu.Add("Exit").OnClick(func(*application.Context) {
