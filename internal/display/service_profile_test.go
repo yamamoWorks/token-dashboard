@@ -1,0 +1,77 @@
+package display
+
+import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"image"
+	"image/png"
+	"io"
+	"log/slog"
+	"strings"
+	"testing"
+	"time"
+
+	"token-monitor-turzx/internal/usage"
+)
+
+type solidProfileLayout struct{ size image.Point }
+
+func (l solidProfileLayout) Size() image.Point { return l.size }
+func (l solidProfileLayout) Render(_ *Renderer, _ *usage.Stats, _ time.Time, _ string, _ Style) *image.RGBA {
+	return image.NewRGBA(image.Rectangle{Max: l.size})
+}
+
+func TestRunPreviewUsesSelectedProfileSize(t *testing.T) {
+	compact, ok := ProfileByID(CompactProfileID)
+	if !ok {
+		t.Fatal("compact profile is missing")
+	}
+	// Keep the built-in profile metadata while replacing only drawing with a font-free test layout.
+	compact.Layout = solidProfileLayout{size: image.Pt(compact.Width, compact.Height)}
+
+	state := usage.NewState()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	service := &Service{
+		State:  state,
+		Hidden: func() ([]string, error) { return nil, nil },
+		Show:   func([]string, bool) error { return nil },
+		Logger: logger,
+	}
+	updated := make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		Run(ctx, service, &Renderer{}, state, time.Hour,
+			func() DisplayProfile { return compact }, func() Style { return Gauges },
+			func(*image.RGBA) {}, func(name string, _ any) {
+				if name == Updated {
+					updated <- struct{}{}
+				}
+			}, logger)
+	}()
+
+	select {
+	case <-updated:
+	case <-time.After(2 * time.Second):
+		cancel()
+		<-done
+		t.Fatal("preview was not updated")
+	}
+	cancel()
+	<-done
+
+	encoded := strings.TrimPrefix(service.Preview(), "data:image/png;base64,")
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := png.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := image.Pt(config.Width, config.Height), image.Pt(480, 320); got != want {
+		t.Fatalf("preview size = %v, want %v", got, want)
+	}
+}
