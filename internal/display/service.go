@@ -71,9 +71,10 @@ func (s *Service) Preview() string {
 }
 
 // Run redraws when the state changes and at least every redraw (a minute in the app) so the time
-// until reset stays current. Each image goes to the preview in s and to output. It is a function,
-// not a method, so Wails does not bind it.
-func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State, redraw time.Duration, style func() Style, output func(*image.RGBA), emit func(string, any), logger *slog.Logger) {
+// until reset stays current. The selected profile owns the logical size and layout for each image.
+// Each image goes to the preview in s and to output. It is a function, not a method, so Wails does
+// not bind it.
+func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State, redraw time.Duration, profile func() DisplayProfile, style func() Style, output func(*image.RGBA), emit func(string, any), logger *slog.Logger) {
 	ticker := time.NewTicker(redraw)
 	defer ticker.Stop()
 	for {
@@ -83,7 +84,11 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 		if err != nil {
 			logger.Warn("hidden_limits_unavailable", "cause", err)
 		}
-		img := renderer.Render(withoutHidden(stats, hidden), time.Now(), source, style())
+		selected := DefaultProfile()
+		if profile != nil {
+			selected = profile()
+		}
+		img := selected.Render(renderer, withoutHidden(stats, hidden), time.Now(), source, style())
 		output(img)
 		var buf bytes.Buffer
 		if err := png.Encode(&buf, img); err != nil {
