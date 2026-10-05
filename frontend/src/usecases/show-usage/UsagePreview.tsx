@@ -4,14 +4,7 @@ import { Card, Group, Image, Text, Title } from '@mantine/core';
 import { getPreview, previewKey, subscribePreview } from '../../features/display/queries';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { useSettingsDraft } from '../configure-hub/SettingsDraft';
-
-type ProfileSize = { id: string; width: number; height: number };
-
-// A missing profile can only happen while settings are still loading; preserve the legacy ratio then.
-export function previewAspectRatio(profiles: readonly ProfileSize[], profileID?: string) {
-  const profile = profiles.find(candidate => candidate.id === profileID);
-  return profile ? `${profile.width} / ${profile.height}` : '1920 / 462';
-}
+import { previewAspectRatio } from './preview';
 
 // Shows the image the app sends to the TURZX. The window never draws it. The control sits right of
 // the title and the children go above the image.
