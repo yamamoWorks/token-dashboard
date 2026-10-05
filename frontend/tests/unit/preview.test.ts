@@ -12,7 +12,7 @@ describe('previewAspectRatio', () => {
     expect(previewAspectRatio(profiles, 'compact-gauge-480x320')).toBe('480 / 320');
   });
 
-  it('preserves the legacy ratio while profile settings are unavailable', () => {
-    expect(previewAspectRatio([], undefined)).toBe('1920 / 462');
+  it('uses the image intrinsic ratio while profile settings are unavailable', () => {
+    expect(previewAspectRatio([], undefined)).toBe('auto');
   });
 });
