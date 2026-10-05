@@ -1,4 +1,4 @@
-// Package settings owns the usage source, Hub connection, and TURZX display selection.
+// Package settings owns the usage source, Hub connection, TURZX display selection, and display profile.
 package settings
 
 import (
@@ -16,6 +16,7 @@ import (
 	"sync"
 	"unicode"
 
+	displaypkg "token-monitor-turzx/internal/display"
 	"token-monitor-turzx/internal/fault"
 	"token-monitor-turzx/internal/turzx"
 )
@@ -27,6 +28,15 @@ type Display struct {
 	Connected bool   `json:"connected"`
 }
 
+// DisplayProfile is profile metadata safe to expose to the settings window. The Layout stays in the
+// display package and never crosses the Wails boundary.
+type DisplayProfile struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
 // View never contains the token itself, only whether one is saved.
 type View struct {
 	Source   string `json:"source"`
@@ -35,6 +45,9 @@ type View struct {
 	// DisplayID is empty when the first connected display is used automatically.
 	DisplayID string    `json:"displayID"`
 	Displays  []Display `json:"displays"`
+	// DisplayProfileID identifies the logical size and Layout used for rendering and preview.
+	DisplayProfileID string           `json:"displayProfileID"`
+	DisplayProfiles  []DisplayProfile `json:"displayProfiles"`
 	// LimitStyle is how Usage Limits are drawn: Gauges or Bars.
 	LimitStyle string `json:"limitStyle"`
 }
@@ -45,6 +58,8 @@ type SaveRequest struct {
 	// An empty token keeps the saved one.
 	Token     string `json:"token"`
 	DisplayID string `json:"displayID"`
+	// An empty DisplayProfileID keeps the current one.
+	DisplayProfileID string `json:"displayProfileID"`
 	// An empty LimitStyle keeps the current one.
 	LimitStyle string `json:"limitStyle"`
 }
@@ -55,6 +70,8 @@ type file struct {
 	Connection  string `json:"connection,omitempty"`
 	DisplayID   string `json:"displayID"`
 	DisplayName string `json:"displayName"`
+	// DisplayProfileID is absent in legacy settings; that means the existing ultra-wide profile.
+	DisplayProfileID string `json:"displayProfileID,omitempty"`
 	// LimitStyle is Gauges or Bars; absent means Gauges.
 	LimitStyle string `json:"limitStyle,omitempty"`
 	// HiddenLimits are the keys of the windows that are not drawn; absent means all are drawn.
@@ -76,6 +93,8 @@ type Service struct {
 	OnSaved func()
 	// OnStyleSaved tells the display that the style changed. It must not block.
 	OnStyleSaved func()
+	// OnProfileSaved tells the display that the logical size/layout changed. It must not block.
+	OnProfileSaved func()
 }
 
 func New(path, appID string, list func() ([]turzx.Device, error), logger *slog.Logger) *Service {
@@ -103,6 +122,17 @@ func styleOf(saved file) string {
 		return "Bars"
 	}
 	return "Gauges"
+}
+
+// profileOf is the saved profile. Missing or unknown legacy values preserve the existing ultra-wide
+// behavior rather than preventing the application from starting.
+func profileOf(saved file) displaypkg.DisplayProfile {
+	if saved.DisplayProfileID != "" {
+		if profile, ok := displaypkg.ProfileByID(saved.DisplayProfileID); ok {
+			return profile
+		}
+	}
+	return displaypkg.DefaultProfile()
 }
 
 func (s *Service) Save(req SaveRequest) (view View, err error) {
@@ -139,10 +169,18 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 			fields["token"] = "The access token must not contain control characters."
 		}
 	}
+	if req.DisplayProfileID != "" {
+		if _, ok := displaypkg.ProfileByID(req.DisplayProfileID); !ok {
+			fields["displayProfileID"] = "Choose an available display profile."
+		}
+	}
 	if req.LimitStyle != "" && req.LimitStyle != "Gauges" && req.LimitStyle != "Bars" {
 		fields["limitStyle"] = "Choose Gauges or Bars."
 	}
-	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID, LimitStyle: saved.LimitStyle, HiddenLimits: saved.HiddenLimits}
+	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID, DisplayProfileID: saved.DisplayProfileID, LimitStyle: saved.LimitStyle, HiddenLimits: saved.HiddenLimits}
+	if req.DisplayProfileID != "" {
+		next.DisplayProfileID = req.DisplayProfileID
+	}
 	if req.LimitStyle != "" {
 		next.LimitStyle = req.LimitStyle
 	}
@@ -174,13 +212,16 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 		return View{}, err
 	}
 	s.logger.Info("settings_saved")
-	// The source is read again only when the source or the connection changed. A new display or style
+	// The source is read again only when the source or the connection changed. Display-only choices
 	// must not interrupt reading, which would blank the image until the next usage arrives.
 	if s.OnSaved != nil && (next.Source != saved.Source || (next.Source == "Hub" && conn != before)) {
 		s.OnSaved()
 	}
 	if styleOf(next) != styleOf(saved) && s.OnStyleSaved != nil {
 		s.OnStyleSaved()
+	}
+	if profileOf(next).ID != profileOf(saved).ID && s.OnProfileSaved != nil {
+		s.OnProfileSaved()
 	}
 	return viewOf(next, conn, devices), nil
 }
@@ -261,7 +302,12 @@ func viewOf(saved file, conn connection, devices []turzx.Device) View {
 	if saved.DisplayID != "" && !slices.ContainsFunc(devices, func(d turzx.Device) bool { return d.ID == saved.DisplayID }) {
 		displays = append(displays, Display{DeviceID: saved.DisplayID, Name: saved.DisplayName})
 	}
-	return View{Source: saved.Source, URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays, LimitStyle: styleOf(saved)}
+	profiles := make([]DisplayProfile, 0, len(displaypkg.Profiles()))
+	for _, profile := range displaypkg.Profiles() {
+		profiles = append(profiles, DisplayProfile{ID: profile.ID, Name: profile.Name, Width: profile.Width, Height: profile.Height})
+	}
+	profile := profileOf(saved)
+	return View{Source: saved.Source, URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays, DisplayProfileID: profile.ID, DisplayProfiles: profiles, LimitStyle: styleOf(saved)}
 }
 
 // parseOrigin accepts only http(s)://host[:port] with an optional trailing slash.
@@ -284,6 +330,18 @@ func LimitStyle(s *Service) string {
 		return "Gauges"
 	}
 	return styleOf(saved)
+}
+
+// SelectedDisplayProfile returns the saved profile, or the legacy ultra-wide profile when none is
+// saved or the file cannot be read. It is a function, not a method, so Wails does not bind it.
+func SelectedDisplayProfile(s *Service) displaypkg.DisplayProfile {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	saved, _, err := s.read()
+	if err != nil {
+		return displaypkg.DefaultProfile()
+	}
+	return profileOf(saved)
 }
 
 // HiddenLimits returns the saved keys of the windows that are not drawn. It is a function, not a
