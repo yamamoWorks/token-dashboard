@@ -30,14 +30,14 @@ func newProfile(id, name string, layout Layout) DisplayProfile {
 // Profiles returns the display profiles the application can render and preview.
 func Profiles() []DisplayProfile {
 	return []DisplayProfile{
-		newProfile(UltraWideProfileID, "1920 × 462 Ultra-wide", UltraWideLayout{}),
-		newProfile(CompactProfileID, "480 × 320 Compact Gauge", CompactGaugeLayout{}),
+		newProfile(UltraWideProfileID, "TURZX 9.2 Inch", UltraWideLayout{}),
+		newProfile(CompactProfileID, "TURZX 3.5 Inch", CompactGaugeLayout{}),
 	}
 }
 
 // DefaultProfile preserves the existing 1920x462 behavior for settings files created before profiles existed.
 func DefaultProfile() DisplayProfile {
-	return newProfile(UltraWideProfileID, "1920 × 462 Ultra-wide", UltraWideLayout{})
+	return newProfile(UltraWideProfileID, "TURZX 9.2 Inch", UltraWideLayout{})
 }
 
 // ProfileByID resolves one selectable profile.
