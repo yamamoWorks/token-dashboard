@@ -23,17 +23,23 @@ const (
 	compactWidth  = 480
 	compactHeight = 320
 
-	compactMargin      = 8
-	compactPaneGap     = 8
-	compactPanelTop    = 48
-	compactPanelPad    = 10
-	compactPanelBottom = 8
-	compactPaneWidth   = (compactWidth - 2*compactMargin - compactPaneGap) / 2
+	compactMargin           = 8
+	compactPaneGap          = 8
+	compactPanelTop         = 48
+	compactPanelPad         = 10
+	compactPanelBottom      = 8
+	compactPagedPanelBottom = 26
+	compactPaneWidth        = (compactWidth - 2*compactMargin - compactPaneGap) / 2
 
 	compactGaugeRadius      = 63.0
 	compactGaugeInnerRadius = 47.0
 	compactGaugeStroke      = 9.0
 	compactGaugeCenterY     = 160.0
+
+	compactProvidersPerPage   = 2
+	compactPageDuration        = 10 * time.Second
+	compactIndicatorBaseline  = 314
+	compactIndicatorMaxDots   = 6
 )
 
 func (CompactGaugeLayout) Size() image.Point {
@@ -55,9 +61,13 @@ func (l CompactGaugeLayout) Render(renderer *Renderer, stats *usage.Stats, now t
 	}
 
 	renderer.compactTokenStrip(img, stats.Periods.Today)
-	for i, provider := range compactProviders(stats.Limits) {
+	providers, page, pageCount := compactProviderPage(compactProviders(stats.Limits), now)
+	for i, provider := range providers {
 		x := compactMargin + i*(compactPaneWidth+compactPaneGap)
-		renderer.compactProvider(img, provider, x, now)
+		renderer.compactProvider(img, provider, x, now, pageCount > 1)
+	}
+	if pageCount > 1 {
+		renderer.compactPageIndicator(img, page, pageCount)
 	}
 	return img
 }
@@ -69,10 +79,11 @@ type compactProviderData struct {
 	windows  []usage.Window
 }
 
-// compactProviders keeps Hub input order and at most the first two providers with metered windows.
-// Risk-based provider ordering and paging are deliberately left to the paging layer.
+// compactProviders returns every provider with metered windows ordered by risk. The smallest known
+// remaining percentage in the displayed windows comes first, unknown providers follow known ones,
+// and stable sorting preserves Hub input order for ties.
 func compactProviders(limits usage.Limits) []compactProviderData {
-	providers := make([]compactProviderData, 0, 2)
+	providers := make([]compactProviderData, 0, len(limits.Providers))
 	for _, provider := range limits.Providers {
 		windows := compactWindowSelection(provider.Windows)
 		if len(windows) == 0 {
@@ -88,11 +99,71 @@ func compactProviders(limits usage.Limits) []compactProviderData {
 			plan:     plan,
 			windows:  compactRingOrder(windows),
 		})
-		if len(providers) == 2 {
-			break
+	}
+	slices.SortStableFunc(providers, func(a, b compactProviderData) int {
+		aRisk, aKnown := compactProviderRisk(a)
+		bRisk, bKnown := compactProviderRisk(b)
+		switch {
+		case aKnown && !bKnown:
+			return -1
+		case !aKnown && bKnown:
+			return 1
+		case !aKnown:
+			return 0
+		default:
+			return cmp.Compare(aRisk, bRisk)
+		}
+	})
+	return providers
+}
+
+func compactProviderRisk(provider compactProviderData) (float64, bool) {
+	lowest := math.Inf(1)
+	for _, window := range provider.windows {
+		if window.RemainingPercent != nil {
+			lowest = min(lowest, *window.RemainingPercent)
 		}
 	}
-	return providers
+	return lowest, !math.IsInf(lowest, 1)
+}
+
+// compactProviderPage derives the current page solely from now so the existing redraw loop drives
+// paging without an additional timer or goroutine.
+func compactProviderPage(providers []compactProviderData, now time.Time) ([]compactProviderData, int, int) {
+	pageCount := (len(providers) + compactProvidersPerPage - 1) / compactProvidersPerPage
+	if pageCount <= 1 {
+		return providers, 0, pageCount
+	}
+
+	page := int((now.Unix() / int64(compactPageDuration/time.Second)) % int64(pageCount))
+	if page < 0 {
+		page += pageCount
+	}
+	start := page * compactProvidersPerPage
+	end := min(start+compactProvidersPerPage, len(providers))
+	return providers[start:end], page, pageCount
+}
+
+func compactPageIndicatorText(page, pageCount int) string {
+	if pageCount <= 1 {
+		return ""
+	}
+	if pageCount > compactIndicatorMaxDots {
+		return fmt.Sprintf("%d / %d", page+1, pageCount)
+	}
+
+	var indicator strings.Builder
+	for i := range pageCount {
+		if i > 0 {
+			indicator.WriteByte(' ')
+		}
+		if i == page {
+			indicator.WriteRune('●')
+		} else {
+			indicator.WriteRune('○')
+		}
+	}
+	return indicator.String()
 }
 
 // compactWindowSelection returns at most two metered windows. Windows with a known remaining
@@ -158,8 +229,12 @@ func (r *Renderer) compactTokenStrip(img *image.RGBA, today usage.Period) {
 	fill(img, image.Rect(compactMargin, 40, compactWidth-compactMargin, 41), divider)
 }
 
-func (r *Renderer) compactProvider(img *image.RGBA, provider compactProviderData, x int, now time.Time) {
-	rect := image.Rect(x, compactPanelTop, x+compactPaneWidth, compactHeight-compactPanelBottom)
+func (r *Renderer) compactProvider(img *image.RGBA, provider compactProviderData, x int, now time.Time, paged bool) {
+	panelBottom := compactPanelBottom
+	if paged {
+		panelBottom = compactPagedPanelBottom
+	}
+	rect := image.Rect(x, compactPanelTop, x+compactPaneWidth, compactHeight-panelBottom)
 	roundRect(img, rect, 12, divider)
 	roundRect(img, rect.Inset(1), 11, panelFill)
 
@@ -223,4 +298,13 @@ func (r *Renderer) compactProvider(img *image.RGBA, provider compactProviderData
 		clock(img, float64(tx+measure(resetLabelFace, label)+gap+iconDiameter/2), float64(y)-5, float64(iconDiameter)/2)
 		r.text(img, resetFace, text, tx+measure(resetLabelFace, label)+gap+iconDiameter+5, y, reset)
 	}
+}
+
+func (r *Renderer) compactPageIndicator(img *image.RGBA, page, pageCount int) {
+	indicator := compactPageIndicatorText(page, pageCount)
+	if indicator == "" {
+		return
+	}
+	face := r.face(false, 13)
+	r.text(img, face, dim, (compactWidth-measure(face, indicator))/2, compactIndicatorBaseline, indicator)
 }
