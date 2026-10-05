@@ -3,19 +3,30 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, Group, Image, Text, Title } from '@mantine/core';
 import { getPreview, previewKey, subscribePreview } from '../../features/display/queries';
 import { ErrorNotice } from '../../shared/ErrorNotice';
+import { useSettingsDraft } from '../configure-hub/SettingsDraft';
+
+type ProfileSize = { id: string; width: number; height: number };
+
+// A missing profile can only happen while settings are still loading; preserve the legacy ratio then.
+export function previewAspectRatio(profiles: readonly ProfileSize[], profileID?: string) {
+  const profile = profiles.find(candidate => candidate.id === profileID);
+  return profile ? `${profile.width} / ${profile.height}` : '1920 / 462';
+}
 
 // Shows the image the app sends to the TURZX. The window never draws it. The control sits right of
 // the title and the children go above the image.
 export function UsagePreview({ title, control, children }: { title: string; control?: ReactNode; children?: ReactNode }) {
   const client = useQueryClient();
   const preview = useQuery(getPreview());
+  const draft = useSettingsDraft();
+  const aspectRatio = previewAspectRatio(draft?.saved.displayProfiles ?? [], draft?.profile);
   useEffect(() => subscribePreview(() => void client.invalidateQueries({ queryKey: previewKey })), [client]);
   return <Card withBorder padding="md">
     <Group gap="md" mb="sm"><Title order={4}>{title}</Title>{control}</Group>
     {children}
     <ErrorNotice error={preview.error} />
     {preview.data
-      ? <Image src={preview.data} alt="Display preview" radius="sm" style={{ aspectRatio: '1920 / 462' }} />
+      ? <Image src={preview.data} alt="Display preview" radius="sm" style={{ aspectRatio }} />
       : !preview.error && <Text size="sm" c="dimmed">No image yet.</Text>}
   </Card>;
 }
