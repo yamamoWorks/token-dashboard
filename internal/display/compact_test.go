@@ -25,6 +25,22 @@ func compactWindowLabels(windows []usage.Window) []string {
 	return labels
 }
 
+func compactProviderNames(providers []compactProviderData) []string {
+	names := make([]string, len(providers))
+	for i, provider := range providers {
+		names[i] = provider.name
+	}
+	return names
+}
+
+func compactProviderFixtures(count int) []compactProviderData {
+	providers := make([]compactProviderData, count)
+	for i := range providers {
+		providers[i] = compactProviderData{name: string(rune('A' + i))}
+	}
+	return providers
+}
+
 func TestCompactGaugeLayoutSize(t *testing.T) {
 	if got, want := (CompactGaugeLayout{}).Size(), image.Pt(480, 320); got != want {
 		t.Fatalf("compact size = %v, want %v", got, want)
@@ -73,19 +89,83 @@ func TestCompactRingOrderPutsShorterWindowOutside(t *testing.T) {
 	}
 }
 
-func TestCompactProvidersKeepInputOrderAndAtMostTwo(t *testing.T) {
+func TestCompactProvidersSortByRiskAndKeepStableTies(t *testing.T) {
 	limits := usage.Limits{Providers: []usage.Provider{
-		{Provider: "empty", Windows: []usage.Window{{ShowMeter: false}}},
-		{Provider: "first", AccountLabel: "Account", Windows: []usage.Window{{ShowMeter: true}}},
-		{Provider: "second", PlanLabel: "Plus", Windows: []usage.Window{{ShowMeter: true}}},
-		{Provider: "third", PlanLabel: "Pro", Windows: []usage.Window{{ShowMeter: true}}},
+		{Provider: "unknown-first", AccountLabel: "Account", Windows: []usage.Window{{ShowMeter: true}}},
+		{Provider: "forty", PlanLabel: "Plus", Windows: []usage.Window{{ShowMeter: true, RemainingPercent: value(40)}}},
+		{Provider: "ten-first", Windows: []usage.Window{{ShowMeter: true, RemainingPercent: value(10)}}},
+		{Provider: "ten-second", Windows: []usage.Window{{ShowMeter: true, RemainingPercent: value(10)}, {ShowMeter: false, RemainingPercent: value(1)}}},
+		{Provider: "unknown-second", Windows: []usage.Window{{ShowMeter: true}}},
+		{Provider: "empty", Windows: []usage.Window{{ShowMeter: false, RemainingPercent: value(0)}}},
 	}}
 	providers := compactProviders(limits)
-	if len(providers) != 2 {
-		t.Fatalf("provider count = %d, want 2", len(providers))
+	got := compactProviderNames(providers)
+	want := []string{"ten-first", "ten-second", "forty", "unknown-first", "unknown-second"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("providers = %v, want %v", got, want)
 	}
-	if providers[0].name != "first" || providers[0].plan != "Account" || providers[1].name != "second" || providers[1].plan != "Plus" {
-		t.Fatalf("providers = %+v", providers)
+	if providers[2].plan != "Plus" || providers[3].plan != "Account" {
+		t.Fatalf("provider plan fallback = %+v", providers)
+	}
+}
+
+func TestCompactProviderPageCounts(t *testing.T) {
+	tests := []struct {
+		providers int
+		pages     int
+		visible   int
+	}{
+		{providers: 1, pages: 1, visible: 1},
+		{providers: 2, pages: 1, visible: 2},
+		{providers: 3, pages: 2, visible: 2},
+		{providers: 4, pages: 2, visible: 2},
+		{providers: 5, pages: 3, visible: 2},
+	}
+	for _, tt := range tests {
+		page, index, pageCount := compactProviderPage(compactProviderFixtures(tt.providers), time.Unix(0, 0))
+		if index != 0 || pageCount != tt.pages || len(page) != tt.visible {
+			t.Fatalf("providers=%d: index=%d pages=%d visible=%d", tt.providers, index, pageCount, len(page))
+		}
+	}
+}
+
+func TestCompactProviderPageChangesEveryTenSecondsAndVisitsAllProviders(t *testing.T) {
+	providers := compactProviderFixtures(5)
+	tests := []struct {
+		second int64
+		page   int
+		want   []string
+	}{
+		{second: 0, page: 0, want: []string{"A", "B"}},
+		{second: 9, page: 0, want: []string{"A", "B"}},
+		{second: 10, page: 1, want: []string{"C", "D"}},
+		{second: 19, page: 1, want: []string{"C", "D"}},
+		{second: 20, page: 2, want: []string{"E"}},
+		{second: 30, page: 0, want: []string{"A", "B"}},
+	}
+	for _, tt := range tests {
+		page, index, pageCount := compactProviderPage(providers, time.Unix(tt.second, 0))
+		if pageCount != 3 || index != tt.page {
+			t.Fatalf("second=%d: index=%d pageCount=%d", tt.second, index, pageCount)
+		}
+		if got := compactProviderNames(page); !reflect.DeepEqual(got, tt.want) {
+			t.Fatalf("second=%d: providers=%v, want %v", tt.second, got, tt.want)
+		}
+	}
+}
+
+func TestCompactPageIndicatorOnlyForMultiplePages(t *testing.T) {
+	if got := compactPageIndicatorText(0, 1); got != "" {
+		t.Fatalf("single-page indicator = %q, want empty", got)
+	}
+	if got := compactPageIndicatorText(0, 2); got != "● ○" {
+		t.Fatalf("first indicator = %q", got)
+	}
+	if got := compactPageIndicatorText(1, 2); got != "○ ●" {
+		t.Fatalf("second indicator = %q", got)
+	}
+	if got := compactPageIndicatorText(2, 7); got != "3 / 7" {
+		t.Fatalf("fallback indicator = %q", got)
 	}
 }
 
@@ -161,5 +241,19 @@ func TestCompactSingleProviderDoesNotExpandIntoSecondPane(t *testing.T) {
 	img := renderer.Render(stats, time.Unix(0, 0), "Hub", Gauges)
 	if got := img.RGBAAt(360, 100); got != background {
 		t.Fatalf("second pane pixel = %v, want background %v", got, background)
+	}
+}
+
+func TestCompactRenderChangesAtPageBoundary(t *testing.T) {
+	renderer := newCompactTestRenderer(t)
+	stats := &usage.Stats{Limits: usage.Limits{Providers: []usage.Provider{
+		{Provider: "First", Windows: []usage.Window{{Kind: "session", Label: "First", ShowMeter: true, RemainingPercent: value(10)}}},
+		{Provider: "Second", Windows: []usage.Window{{Kind: "session", Label: "Second", ShowMeter: true, RemainingPercent: value(20)}}},
+		{Provider: "Third", Windows: []usage.Window{{Kind: "session", Label: "Third", ShowMeter: true, RemainingPercent: value(30)}}},
+	}}}
+	firstPage := renderer.Render(stats, time.Unix(0, 0), "Hub", Gauges)
+	secondPage := renderer.Render(stats, time.Unix(10, 0), "Hub", Gauges)
+	if bytes.Equal(firstPage.Pix, secondPage.Pix) {
+		t.Fatal("compact render did not change at the 10-second page boundary")
 	}
 }
