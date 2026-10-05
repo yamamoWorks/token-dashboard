@@ -31,10 +31,10 @@ const (
 	compactPagedPanelBottom = 26
 	compactPaneWidth        = (compactWidth - 2*compactMargin - compactPaneGap) / 2
 
-	compactGaugeRadius      = 63.0
-	compactGaugeInnerRadius = 47.0
+	compactGaugeRadius      = 71.0
+	compactGaugeInnerRadius = 55.0
 	compactGaugeStroke      = 9.0
-	compactGaugeCenterY     = 160.0
+	compactGaugeCenterY     = 174.0
 
 	compactProvidersPerPage   = 2
 	compactPageDuration        = 10 * time.Second
@@ -267,9 +267,9 @@ func (r *Renderer) compactProvider(img *image.RGBA, provider compactProviderData
 
 	percentFace := r.face(true, 25)
 	windowFace := r.face(false, 15)
-	baselines := []int{167}
+	baselines := []int{int(compactGaugeCenterY) + 7}
 	if len(provider.windows) == 2 {
-		baselines = []int{154, 181}
+		baselines = []int{int(compactGaugeCenterY) - 6, int(compactGaugeCenterY) + 21}
 	}
 	for i, window := range provider.windows {
 		percent := "—"
@@ -287,10 +287,14 @@ func (r *Renderer) compactProvider(img *image.RGBA, provider compactProviderData
 	resetFace := r.face(false, 14)
 	resetY := 253
 	for i, window := range provider.windows {
-		label := windowLabel(window)
+		label := groupOf(window)
+		if label == "" {
+			label = windowLabel(window)
+		}
 		reset := resetIn(window, now)
 		gap := 8
 		iconDiameter := 12
+		label = truncate(resetLabelFace, label, compactPaneWidth-2*compactPanelPad-gap-iconDiameter-5-measure(resetFace, reset))
 		total := measure(resetLabelFace, label) + gap + iconDiameter + 5 + measure(resetFace, reset)
 		tx := int(cx) - total/2
 		y := resetY + i*25

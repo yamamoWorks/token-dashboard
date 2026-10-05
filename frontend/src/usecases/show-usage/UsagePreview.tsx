@@ -4,7 +4,7 @@ import { Card, Group, Image, Text, Title } from '@mantine/core';
 import { getPreview, previewKey, subscribePreview } from '../../features/display/queries';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { useSettingsDraft } from '../configure-hub/SettingsDraft';
-import { previewAspectRatio } from './preview';
+import { previewAspectRatio, previewWidth } from './preview';
 
 // Shows the image the app sends to the TURZX. The window never draws it. The control sits right of
 // the title and the children go above the image.
@@ -13,13 +13,14 @@ export function UsagePreview({ title, control, children }: { title: string; cont
   const preview = useQuery(getPreview());
   const draft = useSettingsDraft();
   const aspectRatio = previewAspectRatio(draft?.saved.displayProfiles ?? [], draft?.profile);
+  const width = previewWidth(draft?.saved.displayProfiles ?? [], draft?.profile);
   useEffect(() => subscribePreview(() => void client.invalidateQueries({ queryKey: previewKey })), [client]);
   return <Card withBorder padding="md">
     <Group gap="md" mb="sm"><Title order={4}>{title}</Title>{control}</Group>
     {children}
     <ErrorNotice error={preview.error} />
     {preview.data
-      ? <Image src={preview.data} alt="Display preview" radius="sm" style={{ aspectRatio }} />
+      ? <Image src={preview.data} alt="Display preview" radius="sm" w={width} style={{ aspectRatio }} />
       : !preview.error && <Text size="sm" c="dimmed">No image yet.</Text>}
   </Card>;
 }
