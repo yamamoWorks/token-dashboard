@@ -222,7 +222,7 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 		fields["limitStyle"] = "Choose Gauges or Bars."
 	}
 	next := file{
-		Source: saved.Source, Connection: saved.Connection, DisplayID: req.DisplayID, DisplayName: saved.DisplayName,
+		Source: saved.Source, Connection: saved.Connection, DisplayID: req.DisplayID,
 		DisplayProfileID: saved.DisplayProfileID, LimitStyle: saved.LimitStyle, HiddenLimits: saved.HiddenLimits,
 		CompactAutoPage: saved.CompactAutoPage, CompactPageIntervalSeconds: saved.CompactPageIntervalSeconds,
 	}
