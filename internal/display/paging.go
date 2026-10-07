@@ -17,7 +17,7 @@ func DefaultCompactPagingSettings() CompactPagingSettings {
 }
 
 func (p CompactPagingSettings) normalized() CompactPagingSettings {
-	if p.Interval <= 0 {
+	if p.Interval < time.Second {
 		p.Interval = DefaultCompactPageInterval
 	}
 	return p
