@@ -37,7 +37,7 @@ const (
 	compactGaugeCenterY     = 174.0
 
 	compactProvidersPerPage   = 2
-	compactPageDuration        = 10 * time.Second
+	compactPageDuration        = DefaultCompactPageInterval
 	compactIndicatorBaseline  = 314
 	compactIndicatorMaxDots   = 6
 )
@@ -46,11 +46,15 @@ func (CompactGaugeLayout) Size() image.Point {
 	return image.Pt(compactWidth, compactHeight)
 }
 
-func (l CompactGaugeLayout) Render(renderer *Renderer, stats *usage.Stats, now time.Time, source string, _ Style) *image.RGBA {
+func (l CompactGaugeLayout) Render(renderer *Renderer, stats *usage.Stats, now time.Time, source string, style Style) *image.RGBA {
+	return l.RenderWithPaging(renderer, stats, now, source, style, DefaultCompactPagingSettings())
+}
+
+func (l CompactGaugeLayout) RenderWithPaging(renderer *Renderer, stats *usage.Stats, now time.Time, source string, _ Style, paging CompactPagingSettings) *image.RGBA {
 	if stats == nil {
 		return l.renderWaiting(renderer, source)
 	}
-	providers, page, pageCount := compactProviderPage(compactProviders(stats.Limits), now)
+	providers, page, pageCount := compactProviderPageWithSettings(compactProviders(stats.Limits), now, paging)
 	return l.renderPage(renderer, stats, now, providers, page, pageCount, true)
 }
 
@@ -164,12 +168,20 @@ func compactPageCount(providers []compactProviderData) int {
 // compactProviderPage derives the current page solely from now so the existing redraw loop drives
 // TURZX paging without an additional timer or goroutine.
 func compactProviderPage(providers []compactProviderData, now time.Time) ([]compactProviderData, int, int) {
+	return compactProviderPageWithSettings(providers, now, DefaultCompactPagingSettings())
+}
+
+func compactProviderPageWithSettings(providers []compactProviderData, now time.Time, paging CompactPagingSettings) ([]compactProviderData, int, int) {
 	pageCount := compactPageCount(providers)
 	if pageCount <= 1 {
 		return providers, 0, pageCount
 	}
+	paging = paging.normalized()
+	if !paging.Auto {
+		return compactProviderPageAt(providers, 0)
+	}
 
-	page := int((now.Unix() / int64(compactPageDuration/time.Second)) % int64(pageCount))
+	page := int((now.Unix() / int64(paging.Interval/time.Second)) % int64(pageCount))
 	if page < 0 {
 		page += pageCount
 	}
