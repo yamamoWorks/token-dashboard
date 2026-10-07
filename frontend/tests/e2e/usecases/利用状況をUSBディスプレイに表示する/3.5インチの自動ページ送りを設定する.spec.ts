@@ -43,7 +43,7 @@ test('3.5インチの自動ページ送りを設定する', async ({ page, conte
   const hub = await startHub();
   let server = await startServer(dataDir, 34128, shortIntervals);
   const file = () => JSON.parse(readFileSync(settingsFile, 'utf8'));
-  const autoPage = () => page.getByRole('checkbox', { name: 'Auto page' });
+  const autoPage = () => page.getByRole('switch', { name: 'Auto page' });
   const interval = () => page.getByRole('textbox', { name: 'Page interval' });
 
   try {
