@@ -70,13 +70,15 @@ func (s *Service) Preview() string {
 	return s.preview
 }
 
-// Run redraws when the state changes and at least every redraw (a minute in the app) so the time
-// until reset stays current. The selected profile owns the logical size and layout for each image.
-// Each image goes to the preview in s and to output. It is a function, not a method, so Wails does
-// not bind it.
+// Run redraws when the state changes and at least as often as the selected profile requires. The
+// application redraw interval remains an upper bound so test/server builds can request faster
+// refreshes. The selected profile owns the logical size and layout for each image. Each image goes
+// to the preview in s and to output. It is a function, not a method, so Wails does not bind it.
 func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State, redraw time.Duration, profile func() DisplayProfile, style func() Style, output func(*image.RGBA), emit func(string, any), logger *slog.Logger) {
 	ticker := time.NewTicker(redraw)
 	defer ticker.Stop()
+	activeInterval := redraw
+
 	for {
 		stats, source := state.Snapshot()
 		// A selection that cannot be read draws every window, as style does for Gauges.
@@ -88,6 +90,11 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 		if profile != nil {
 			selected = profile()
 		}
+		if interval := selected.redrawInterval(redraw); interval != activeInterval {
+			ticker.Reset(interval)
+			activeInterval = interval
+		}
+
 		img := selected.Render(renderer, withoutHidden(stats, hidden), time.Now(), source, style())
 		output(img)
 		var buf bytes.Buffer

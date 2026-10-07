@@ -307,7 +307,8 @@ func localIntervals() localusage.Intervals {
 	return localusage.DefaultIntervals
 }
 
-// redrawInterval is the longest time between two images, which keeps the time until reset current.
+// redrawInterval is the application's maximum time between images. Display profiles may request a
+// shorter interval when their content changes on a finer cadence.
 func redrawInterval() time.Duration {
 	if shortIntervals() {
 		return time.Second

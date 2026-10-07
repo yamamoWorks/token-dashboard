@@ -12,32 +12,42 @@ const (
 	CompactProfileID   = "compact-gauge-480x320"
 )
 
-// DisplayProfile binds a stable selection ID to one logical resolution and layout.
-// Transport-specific details are intentionally outside the profile until a device protocol is known.
+// DisplayProfile binds a stable selection ID to one logical resolution, layout, and maximum redraw
+// interval. Transport-specific details are intentionally outside the profile until a device protocol
+// is known.
 type DisplayProfile struct {
 	ID     string
 	Name   string
 	Width  int
 	Height int
 	Layout Layout
+
+	maxRedrawInterval time.Duration
 }
 
-func newProfile(id, name string, layout Layout) DisplayProfile {
+func newProfile(id, name string, layout Layout, maxRedrawInterval time.Duration) DisplayProfile {
 	size := layout.Size()
-	return DisplayProfile{ID: id, Name: name, Width: size.X, Height: size.Y, Layout: layout}
+	return DisplayProfile{
+		ID:                id,
+		Name:              name,
+		Width:             size.X,
+		Height:            size.Y,
+		Layout:            layout,
+		maxRedrawInterval: maxRedrawInterval,
+	}
 }
 
 // Profiles returns the display profiles the application can render and preview.
 func Profiles() []DisplayProfile {
 	return []DisplayProfile{
-		newProfile(UltraWideProfileID, "TURZX 9.2 Inch", UltraWideLayout{}),
-		newProfile(CompactProfileID, "TURZX 3.5 Inch", CompactGaugeLayout{}),
+		newProfile(UltraWideProfileID, "TURZX 9.2 Inch", UltraWideLayout{}, time.Minute),
+		newProfile(CompactProfileID, "TURZX 3.5 Inch", CompactGaugeLayout{}, compactPageDuration),
 	}
 }
 
 // DefaultProfile preserves the existing 1920x462 behavior for settings files created before profiles existed.
 func DefaultProfile() DisplayProfile {
-	return newProfile(UltraWideProfileID, "TURZX 9.2 Inch", UltraWideLayout{})
+	return newProfile(UltraWideProfileID, "TURZX 9.2 Inch", UltraWideLayout{}, time.Minute)
 }
 
 // ProfileByID resolves one selectable profile.
@@ -48,6 +58,16 @@ func ProfileByID(id string) (DisplayProfile, bool) {
 		}
 	}
 	return DisplayProfile{}, false
+}
+
+// redrawInterval returns the shorter of the application's redraw interval and the profile-specific
+// maximum. This keeps test/server overrides effective while allowing layouts with time-based content
+// to refresh more often in the desktop app.
+func (p DisplayProfile) redrawInterval(appInterval time.Duration) time.Duration {
+	if p.maxRedrawInterval > 0 && p.maxRedrawInterval < appInterval {
+		return p.maxRedrawInterval
+	}
+	return appInterval
 }
 
 // Render draws with this profile without mutating the renderer's legacy default layout.

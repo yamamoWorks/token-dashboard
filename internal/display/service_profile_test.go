@@ -22,6 +22,15 @@ func (l solidProfileLayout) Render(_ *Renderer, _ *usage.Stats, _ time.Time, _ s
 	return image.NewRGBA(image.Rectangle{Max: l.size})
 }
 
+func testProfileService(state *usage.State, logger *slog.Logger) *Service {
+	return &Service{
+		State:  state,
+		Hidden: func() ([]string, error) { return nil, nil },
+		Show:   func([]string, bool) error { return nil },
+		Logger: logger,
+	}
+}
+
 func TestRunPreviewUsesSelectedProfileSize(t *testing.T) {
 	compact, ok := ProfileByID(CompactProfileID)
 	if !ok {
@@ -32,12 +41,7 @@ func TestRunPreviewUsesSelectedProfileSize(t *testing.T) {
 
 	state := usage.NewState()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	service := &Service{
-		State:  state,
-		Hidden: func() ([]string, error) { return nil, nil },
-		Show:   func([]string, bool) error { return nil },
-		Logger: logger,
-	}
+	service := testProfileService(state, logger)
 	updated := make(chan struct{}, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -74,4 +78,38 @@ func TestRunPreviewUsesSelectedProfileSize(t *testing.T) {
 	if got, want := image.Pt(config.Width, config.Height), image.Pt(480, 320); got != want {
 		t.Fatalf("preview size = %v, want %v", got, want)
 	}
+}
+
+func TestRunUsesSelectedProfileRedrawInterval(t *testing.T) {
+	compact, ok := ProfileByID(CompactProfileID)
+	if !ok {
+		t.Fatal("compact profile is missing")
+	}
+	compact.Layout = solidProfileLayout{size: image.Pt(compact.Width, compact.Height)}
+	compact.maxRedrawInterval = 20 * time.Millisecond
+
+	state := usage.NewState()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	service := testProfileService(state, logger)
+	rendered := make(chan struct{}, 3)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		Run(ctx, service, &Renderer{}, state, time.Hour,
+			func() DisplayProfile { return compact }, func() Style { return Gauges },
+			func(*image.RGBA) { rendered <- struct{}{} }, func(string, any) {}, logger)
+	}()
+
+	for range 2 {
+		select {
+		case <-rendered:
+		case <-time.After(500 * time.Millisecond):
+			cancel()
+			<-done
+			t.Fatal("profile-specific redraw interval was not used")
+		}
+	}
+	cancel()
+	<-done
 }
