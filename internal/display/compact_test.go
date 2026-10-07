@@ -154,6 +154,41 @@ func TestCompactProviderPageChangesEveryTenSecondsAndVisitsAllProviders(t *testi
 	}
 }
 
+func TestCompactProviderPageUsesConfiguredIntervalAndCanBeDisabled(t *testing.T) {
+	providers := compactProviderFixtures(5)
+	paging := CompactPagingSettings{Auto: true, Interval: 5 * time.Second}
+	tests := []struct {
+		second int64
+		page   int
+		want   []string
+	}{
+		{second: 0, page: 0, want: []string{"A", "B"}},
+		{second: 4, page: 0, want: []string{"A", "B"}},
+		{second: 5, page: 1, want: []string{"C", "D"}},
+		{second: 10, page: 2, want: []string{"E"}},
+		{second: 15, page: 0, want: []string{"A", "B"}},
+	}
+	for _, tt := range tests {
+		page, index, pageCount := compactProviderPageWithSettings(providers, time.Unix(tt.second, 0), paging)
+		if pageCount != 3 || index != tt.page {
+			t.Fatalf("second=%d: index=%d pageCount=%d", tt.second, index, pageCount)
+		}
+		if got := compactProviderNames(page); !reflect.DeepEqual(got, tt.want) {
+			t.Fatalf("second=%d: providers=%v, want %v", tt.second, got, tt.want)
+		}
+	}
+
+	page, index, pageCount := compactProviderPageWithSettings(
+		providers, time.Unix(55, 0), CompactPagingSettings{Auto: false, Interval: 30 * time.Second},
+	)
+	if pageCount != 3 || index != 0 {
+		t.Fatalf("disabled paging: index=%d pageCount=%d", index, pageCount)
+	}
+	if got, want := compactProviderNames(page), []string{"A", "B"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("disabled paging providers=%v, want %v", got, want)
+	}
+}
+
 func TestCompactProviderPageAtSelectsAndClampsExplicitPage(t *testing.T) {
 	providers := compactProviderFixtures(5)
 	tests := []struct {
