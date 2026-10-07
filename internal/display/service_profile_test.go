@@ -113,3 +113,27 @@ func TestRunUsesSelectedProfileRedrawInterval(t *testing.T) {
 	cancel()
 	<-done
 }
+
+func TestPreviewPageClampsSelectionAndReportsPageCount(t *testing.T) {
+	service := &Service{
+		preview:      "device",
+		previewPages: []string{"page-1", "page-2", "page-3"},
+	}
+
+	first := service.PreviewPage(-1)
+	if first.Image != "page-1" || first.Page != 0 || first.PageCount != 3 {
+		t.Fatalf("first preview = %+v", first)
+	}
+	last := service.PreviewPage(99)
+	if last.Image != "page-3" || last.Page != 2 || last.PageCount != 3 {
+		t.Fatalf("last preview = %+v", last)
+	}
+}
+
+func TestPreviewPageFallsBackToDeviceImageBeforePagedPreviewExists(t *testing.T) {
+	service := &Service{preview: "device"}
+	got := service.PreviewPage(3)
+	if got.Image != "device" || got.Page != 0 || got.PageCount != 1 {
+		t.Fatalf("preview = %+v", got)
+	}
+}
