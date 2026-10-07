@@ -26,8 +26,19 @@ type Service struct {
 	Show   func(keys []string, shown bool) error
 	Logger *slog.Logger
 
-	mu      sync.Mutex
-	preview string
+	mu           sync.Mutex
+	preview      string
+	previewPages []string
+}
+
+type PreviewFrame struct {
+	Image     string `json:"image"`
+	Page      int    `json:"page"`
+	PageCount int    `json:"pageCount"`
+}
+
+type previewPager interface {
+	previewPages(renderer *Renderer, stats *usage.Stats, now time.Time, source string, style Style) []*image.RGBA
 }
 
 // hiddenSet is the saved hidden windows as a set.
@@ -63,11 +74,35 @@ func (s *Service) SetShown(keys []string, shown bool) (list []LimitContract, err
 	return s.Limits()
 }
 
-// Preview returns the latest image as a PNG data URL, or "" before the first image.
+// Preview returns the latest TURZX image as a PNG data URL, or "" before the first image.
 func (s *Service) Preview() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.preview
+}
+
+// PreviewPage returns one manually selected window-preview page. The requested page is clamped to
+// the currently available range so a provider-count decrease keeps the preview valid.
+func (s *Service) PreviewPage(page int) PreviewFrame {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pages := s.previewPages
+	if len(pages) == 0 {
+		if s.preview == "" {
+			return PreviewFrame{}
+		}
+		pages = []string{s.preview}
+	}
+	page = min(max(page, 0), len(pages)-1)
+	return PreviewFrame{Image: pages[page], Page: page, PageCount: len(pages)}
+}
+
+func previewDataURL(img *image.RGBA) (string, error) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return "", err
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
 // Run redraws when the state changes and at least as often as the selected profile requires. The
@@ -95,14 +130,36 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 			activeInterval = interval
 		}
 
-		img := selected.Render(renderer, withoutHidden(stats, hidden), time.Now(), source, style())
+		visibleStats := withoutHidden(stats, hidden)
+		now := time.Now()
+		selectedStyle := style()
+		img := selected.Render(renderer, visibleStats, now, source, selectedStyle)
 		output(img)
-		var buf bytes.Buffer
-		if err := png.Encode(&buf, img); err != nil {
+
+		devicePreview, err := previewDataURL(img)
+		if err != nil {
 			logger.Error("preview_encode_failed", "cause", err)
 		} else {
+			pages := []string{devicePreview}
+			if pager, ok := selected.Layout.(previewPager); ok {
+				renderedPages := pager.previewPages(renderer, visibleStats, now, source, selectedStyle)
+				encodedPages := make([]string, 0, len(renderedPages))
+				for _, pageImage := range renderedPages {
+					dataURL, err := previewDataURL(pageImage)
+					if err != nil {
+						logger.Error("preview_page_encode_failed", "cause", err)
+						encodedPages = nil
+						break
+					}
+					encodedPages = append(encodedPages, dataURL)
+				}
+				if len(encodedPages) > 0 {
+					pages = encodedPages
+				}
+			}
 			s.mu.Lock()
-			s.preview = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+			s.preview = devicePreview
+			s.previewPages = pages
 			s.mu.Unlock()
 			emit(Updated, nil)
 		}

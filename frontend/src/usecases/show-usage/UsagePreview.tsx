@@ -1,26 +1,46 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, Group, Image, Text, Title } from '@mantine/core';
-import { getPreview, previewKey, subscribePreview } from '../../features/display/queries';
+import { getPreview, previewRootKey, subscribePreview } from '../../features/display/queries';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { useSettingsDraft } from '../configure-hub/SettingsDraft';
 import { previewAspectRatio, previewWidth } from './preview';
+import styles from './UsagePreview.module.css';
 
-// Shows the image the app sends to the TURZX. The window never draws it. The control sits right of
-// the title and the children go above the image.
+// Shows the latest data for the selected preview page. Compact displays keep the page fixed until
+// the user clicks a page dot; TURZX automatic paging is independent from this window state.
 export function UsagePreview({ title, control, children }: { title: string; control?: ReactNode; children?: ReactNode }) {
   const client = useQueryClient();
-  const preview = useQuery(getPreview());
   const draft = useSettingsDraft();
-  const aspectRatio = previewAspectRatio(draft?.saved.displayProfiles ?? [], draft?.profile);
-  const width = previewWidth(draft?.saved.displayProfiles ?? [], draft?.profile);
-  useEffect(() => subscribePreview(() => void client.invalidateQueries({ queryKey: previewKey })), [client]);
+  const [page, setPage] = useState(0);
+  const preview = useQuery(getPreview(page));
+  const profile = draft?.profile;
+  const aspectRatio = previewAspectRatio(draft?.saved.displayProfiles ?? [], profile);
+  const width = previewWidth(draft?.saved.displayProfiles ?? [], profile);
+
+  useEffect(() => subscribePreview(() => void client.invalidateQueries({ queryKey: previewRootKey })), [client]);
+  useEffect(() => setPage(0), [profile]);
+  useEffect(() => {
+    const pageCount = preview.data?.pageCount ?? 0;
+    if (pageCount > 0 && page >= pageCount) setPage(pageCount - 1);
+  }, [page, preview.data?.pageCount]);
+
   return <Card withBorder padding="md">
     <Group gap="md" mb="sm"><Title order={4}>{title}</Title>{control}</Group>
     {children}
     <ErrorNotice error={preview.error} />
-    {preview.data
-      ? <Image src={preview.data} alt="Display preview" radius="sm" w={width} style={{ aspectRatio }} />
+    {preview.data?.image
+      ? <div className={styles.preview} style={{ width }}>
+          <Image src={preview.data.image} alt="Display preview" radius="sm" w="100%" style={{ aspectRatio }} />
+          {preview.data.pageCount > 1 && <div className={styles.pages} aria-label="Preview pages">
+            {Array.from({ length: preview.data.pageCount }, (_, index) =>
+              <button key={index} type="button" className={styles.page}
+                aria-label={`Preview page ${index + 1}`} aria-current={index === preview.data.page ? 'page' : undefined}
+                onClick={() => setPage(index)}>
+                {index === preview.data.page ? '●' : '○'}
+              </button>)}
+          </div>}
+        </div>
       : !preview.error && <Text size="sm" c="dimmed">No image yet.</Text>}
   </Card>;
 }

@@ -47,26 +47,56 @@ func (CompactGaugeLayout) Size() image.Point {
 }
 
 func (l CompactGaugeLayout) Render(renderer *Renderer, stats *usage.Stats, now time.Time, source string, _ Style) *image.RGBA {
+	if stats == nil {
+		return l.renderWaiting(renderer, source)
+	}
+	providers, page, pageCount := compactProviderPage(compactProviders(stats.Limits), now)
+	return l.renderPage(renderer, stats, now, providers, page, pageCount, true)
+}
+
+// previewPages renders every compact page from the same latest state. The page indicator itself is
+// omitted because the window overlays clickable page controls in the same bottom area.
+func (l CompactGaugeLayout) previewPages(renderer *Renderer, stats *usage.Stats, now time.Time, source string, _ Style) []*image.RGBA {
+	if stats == nil {
+		return []*image.RGBA{l.renderWaiting(renderer, source)}
+	}
+	providers := compactProviders(stats.Limits)
+	pageCount := compactPageCount(providers)
+	if pageCount <= 1 {
+		return []*image.RGBA{l.renderPage(renderer, stats, now, providers, 0, pageCount, false)}
+	}
+
+	pages := make([]*image.RGBA, pageCount)
+	for page := range pageCount {
+		visible, _, _ := compactProviderPageAt(providers, page)
+		pages[page] = l.renderPage(renderer, stats, now, visible, page, pageCount, false)
+	}
+	return pages
+}
+
+func (l CompactGaugeLayout) renderWaiting(renderer *Renderer, source string) *image.RGBA {
 	size := l.Size()
 	img := image.NewRGBA(image.Rect(0, 0, size.X, size.Y))
 	draw.Draw(img, img.Bounds(), image.NewUniform(background), image.Point{}, draw.Src)
-	if stats == nil {
-		face := renderer.face(false, 28)
-		label := "Waiting for Hub"
-		if source == "Local" {
-			label = "Waiting for local usage"
-		}
-		renderer.text(img, face, dim, (size.X-measure(face, label))/2, size.Y/2+10, label)
-		return img
+	face := renderer.face(false, 28)
+	label := "Waiting for Hub"
+	if source == "Local" {
+		label = "Waiting for local usage"
 	}
+	renderer.text(img, face, dim, (size.X-measure(face, label))/2, size.Y/2+10, label)
+	return img
+}
 
+func (l CompactGaugeLayout) renderPage(renderer *Renderer, stats *usage.Stats, now time.Time, providers []compactProviderData, page, pageCount int, showIndicator bool) *image.RGBA {
+	size := l.Size()
+	img := image.NewRGBA(image.Rect(0, 0, size.X, size.Y))
+	draw.Draw(img, img.Bounds(), image.NewUniform(background), image.Point{}, draw.Src)
 	renderer.compactTokenStrip(img, stats.Periods.Today)
-	providers, page, pageCount := compactProviderPage(compactProviders(stats.Limits), now)
 	for i, provider := range providers {
 		x := compactMargin + i*(compactPaneWidth+compactPaneGap)
 		renderer.compactProvider(img, provider, x, now, pageCount > 1)
 	}
-	if pageCount > 1 {
+	if showIndicator && pageCount > 1 {
 		renderer.compactPageIndicator(img, page, pageCount)
 	}
 	return img
@@ -127,10 +157,14 @@ func compactProviderRisk(provider compactProviderData) (float64, bool) {
 	return lowest, !math.IsInf(lowest, 1)
 }
 
+func compactPageCount(providers []compactProviderData) int {
+	return (len(providers) + compactProvidersPerPage - 1) / compactProvidersPerPage
+}
+
 // compactProviderPage derives the current page solely from now so the existing redraw loop drives
-// paging without an additional timer or goroutine.
+// TURZX paging without an additional timer or goroutine.
 func compactProviderPage(providers []compactProviderData, now time.Time) ([]compactProviderData, int, int) {
-	pageCount := (len(providers) + compactProvidersPerPage - 1) / compactProvidersPerPage
+	pageCount := compactPageCount(providers)
 	if pageCount <= 1 {
 		return providers, 0, pageCount
 	}
@@ -139,6 +173,17 @@ func compactProviderPage(providers []compactProviderData, now time.Time) ([]comp
 	if page < 0 {
 		page += pageCount
 	}
+	return compactProviderPageAt(providers, page)
+}
+
+// compactProviderPageAt returns an explicit page for the window preview. Out-of-range pages are
+// clamped so a provider-count decrease cannot leave the preview pointing at a missing page.
+func compactProviderPageAt(providers []compactProviderData, page int) ([]compactProviderData, int, int) {
+	pageCount := compactPageCount(providers)
+	if pageCount <= 1 {
+		return providers, 0, pageCount
+	}
+	page = min(max(page, 0), pageCount-1)
 	start := page * compactProvidersPerPage
 	end := min(start+compactProvidersPerPage, len(providers))
 	return providers[start:end], page, pageCount
