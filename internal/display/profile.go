@@ -65,7 +65,7 @@ func ProfileByID(id string) (DisplayProfile, bool) {
 // to refresh more often in the desktop app.
 func (p DisplayProfile) redrawInterval(appInterval time.Duration, paging ...CompactPagingSettings) time.Duration {
 	maxInterval := p.maxRedrawInterval
-	if p.ID == CompactProfileID && len(paging) > 0 {
+	if _, ok := p.Layout.(CompactGaugeLayout); ok && len(paging) > 0 {
 		compact := paging[0].normalized()
 		if compact.Auto {
 			maxInterval = compact.Interval
