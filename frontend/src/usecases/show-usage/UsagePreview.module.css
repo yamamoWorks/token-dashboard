@@ -1,5 +1,20 @@
+.previewRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 40px;
+}
+
 .preview {
   position: relative;
+  flex: 0 0 auto;
+}
+
+.pagingSettings {
+  width: 320px;
+  margin-top: 4px;
+  padding: 16px 18px;
+  border: 1px solid var(--mantine-color-dark-4);
+  border-radius: var(--mantine-radius-md);
 }
 
 .pages {
@@ -26,4 +41,15 @@
 .page:hover,
 .page:focus-visible {
   color: var(--mantine-color-text);
+}
+
+@media (max-width: 900px) {
+  .previewRow {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .pagingSettings {
+    width: min(100%, 320px);
+  }
 }
