@@ -63,10 +63,10 @@ func ProfileByID(id string) (DisplayProfile, bool) {
 // redrawInterval returns the shorter of the application's redraw interval and the profile-specific
 // maximum. This keeps test/server overrides effective while allowing layouts with time-based content
 // to refresh more often in the desktop app.
-func (p DisplayProfile) redrawInterval(appInterval time.Duration, paging ...CompactPagingSettings) time.Duration {
+func (p DisplayProfile) redrawInterval(appInterval time.Duration, paging CompactPagingSettings) time.Duration {
 	maxInterval := p.maxRedrawInterval
-	if _, ok := p.Layout.(CompactGaugeLayout); ok && len(paging) > 0 {
-		compact := paging[0].normalized()
+	if _, ok := p.Layout.(CompactGaugeLayout); ok {
+		compact := paging.normalized()
 		if compact.Auto {
 			maxInterval = compact.Interval
 		} else {
