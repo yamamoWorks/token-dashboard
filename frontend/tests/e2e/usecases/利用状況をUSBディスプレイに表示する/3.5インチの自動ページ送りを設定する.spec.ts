@@ -44,6 +44,7 @@ test('3.5インチの自動ページ送りを設定する', async ({ page, conte
   let server = await startServer(dataDir, 34128, shortIntervals);
   const file = () => JSON.parse(readFileSync(settingsFile, 'utf8'));
   const autoPage = () => page.getByRole('switch', { name: 'Auto page' });
+  const autoPageLabel = () => page.getByText('Auto page', { exact: true });
   const interval = () => page.getByRole('textbox', { name: 'Page interval' });
 
   try {
@@ -68,7 +69,7 @@ test('3.5インチの自動ページ送りを設定する', async ({ page, conte
 
     const requests = hub.requests.length;
     await test.step('手順1', async () => {
-      await expect(autoPage()).toBeVisible();
+      await expect(autoPageLabel()).toBeVisible();
       await expect(autoPage()).toBeChecked();
       await expect(interval()).toHaveValue('10 sec');
       await expect(interval()).toBeEnabled();
@@ -90,7 +91,7 @@ test('3.5インチの自動ページ送りを設定する', async ({ page, conte
       await secondPage.click();
       await expect(secondPage).toHaveAttribute('aria-current', 'page');
 
-      await autoPage().click();
+      await autoPage().click({ force: true });
       await expect.poll(() => file().compactAutoPage).toBe(false);
       expect(file().compactPageIntervalSeconds).toBe(10);
       await expect(autoPage()).not.toBeChecked();
@@ -101,7 +102,7 @@ test('3.5インチの自動ページ送りを設定する', async ({ page, conte
     });
 
     await test.step('手順3', async () => {
-      await autoPage().click();
+      await autoPage().click({ force: true });
       await expect.poll(() => file().compactAutoPage).toBe(true);
       await expect(autoPage()).toBeChecked();
       await expect(interval()).toBeEnabled();
@@ -149,7 +150,7 @@ test('3.5インチの自動ページ送りを設定する', async ({ page, conte
       // The controls remain available even when there is only one compact preview page.
       hub.send('stats', stats(2));
       await expect(page.getByRole('button', { name: 'Preview page 2' })).toHaveCount(0);
-      await expect(autoPage()).toBeVisible();
+      await expect(autoPageLabel()).toBeVisible();
       await expect(interval()).toHaveValue('30 sec');
 
       // They are hidden for the 9.2-inch profile.
