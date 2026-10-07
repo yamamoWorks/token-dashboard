@@ -60,9 +60,9 @@ test('3.5インチの自動ページ送りを設定する', async ({ page, conte
       hub.send('snapshot', stats());
 
       await page.getByRole('link', { name: 'Display' }).click();
-      await page.getByLabel('Display profile').click();
+      await page.getByRole('textbox', { name: 'Display profile' }).click();
       await page.getByRole('option', { name: 'TURZX 3.5 Inch' }).click();
-      await expect(page.getByLabel('Display profile')).toHaveValue('TURZX 3.5 Inch');
+      await expect(page.getByRole('textbox', { name: 'Display profile' })).toHaveValue('TURZX 3.5 Inch');
       await expect.poll(async () => (await preview(page)).length).toBeGreaterThan(1000);
     });
 
@@ -153,13 +153,13 @@ test('3.5インチの自動ページ送りを設定する', async ({ page, conte
       await expect(interval()).toHaveValue('30 sec');
 
       // They are hidden for the 9.2-inch profile.
-      await page.getByLabel('Display profile').click();
+      await page.getByRole('textbox', { name: 'Display profile' }).click();
       await page.getByRole('option', { name: 'TURZX 9.2 Inch' }).click();
       await expect(autoPage()).toHaveCount(0);
       await expect(interval()).toHaveCount(0);
 
       // Returning to compact restores the saved values.
-      await page.getByLabel('Display profile').click();
+      await page.getByRole('textbox', { name: 'Display profile' }).click();
       await page.getByRole('option', { name: 'TURZX 3.5 Inch' }).click();
       await expect(autoPage()).toBeChecked();
       await expect(interval()).toHaveValue('30 sec');
