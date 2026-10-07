@@ -154,6 +154,29 @@ func TestCompactProviderPageChangesEveryTenSecondsAndVisitsAllProviders(t *testi
 	}
 }
 
+func TestCompactProviderPageAtSelectsAndClampsExplicitPage(t *testing.T) {
+	providers := compactProviderFixtures(5)
+	tests := []struct {
+		requested int
+		page      int
+		want      []string
+	}{
+		{requested: -1, page: 0, want: []string{"A", "B"}},
+		{requested: 1, page: 1, want: []string{"C", "D"}},
+		{requested: 2, page: 2, want: []string{"E"}},
+		{requested: 99, page: 2, want: []string{"E"}},
+	}
+	for _, tt := range tests {
+		page, index, pageCount := compactProviderPageAt(providers, tt.requested)
+		if pageCount != 3 || index != tt.page {
+			t.Fatalf("requested=%d: index=%d pageCount=%d", tt.requested, index, pageCount)
+		}
+		if got := compactProviderNames(page); !reflect.DeepEqual(got, tt.want) {
+			t.Fatalf("requested=%d: providers=%v, want %v", tt.requested, got, tt.want)
+		}
+	}
+}
+
 func TestCompactPageIndicatorOnlyForMultiplePages(t *testing.T) {
 	if got := compactPageIndicatorText(0, 1); got != "" {
 		t.Fatalf("single-page indicator = %q, want empty", got)
@@ -255,5 +278,29 @@ func TestCompactRenderChangesAtPageBoundary(t *testing.T) {
 	secondPage := renderer.Render(stats, time.Unix(10, 0), "Hub", Gauges)
 	if bytes.Equal(firstPage.Pix, secondPage.Pix) {
 		t.Fatal("compact render did not change at the 10-second page boundary")
+	}
+}
+
+func TestCompactPreviewPagesKeepExplicitPageAcrossTime(t *testing.T) {
+	renderer := newCompactTestRenderer(t)
+	layout := CompactGaugeLayout{}
+	stats := &usage.Stats{Limits: usage.Limits{Providers: []usage.Provider{
+		{Provider: "First", Windows: []usage.Window{{Kind: "session", Label: "First", ShowMeter: true, RemainingPercent: value(10)}}},
+		{Provider: "Second", Windows: []usage.Window{{Kind: "session", Label: "Second", ShowMeter: true, RemainingPercent: value(20)}}},
+		{Provider: "Third", Windows: []usage.Window{{Kind: "session", Label: "Third", ShowMeter: true, RemainingPercent: value(30)}}},
+	}}}
+
+	atZero := layout.previewPages(renderer, stats, time.Unix(0, 0), "Hub", Gauges)
+	atTen := layout.previewPages(renderer, stats, time.Unix(10, 0), "Hub", Gauges)
+	if len(atZero) != 2 || len(atTen) != 2 {
+		t.Fatalf("preview pages = %d, %d; want 2", len(atZero), len(atTen))
+	}
+	for page := range 2 {
+		if !bytes.Equal(atZero[page].Pix, atTen[page].Pix) {
+			t.Fatalf("preview page %d changed only because automatic paging time advanced", page)
+		}
+	}
+	if bytes.Equal(atZero[0].Pix, atZero[1].Pix) {
+		t.Fatal("explicit preview pages should render different providers")
 	}
 }
