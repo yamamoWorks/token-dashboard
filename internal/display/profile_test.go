@@ -30,7 +30,7 @@ func TestDisplayProfilesOwnLogicalSizesAndRedrawIntervals(t *testing.T) {
 		if got := profile.Layout.Size(); got != size {
 			t.Fatalf("profile %q layout size = %v, want %v", profile.ID, got, size)
 		}
-		if got, want := profile.redrawInterval(time.Hour), wantIntervals[profile.ID]; got != want {
+		if got, want := profile.redrawInterval(time.Hour, DefaultCompactPagingSettings()), wantIntervals[profile.ID]; got != want {
 			t.Fatalf("profile %q redraw interval = %v, want %v", profile.ID, got, want)
 		}
 		resolved, ok := ProfileByID(profile.ID)
@@ -51,7 +51,24 @@ func TestDisplayProfileRedrawIntervalKeepsFasterApplicationOverride(t *testing.T
 	if !ok {
 		t.Fatal("compact profile is missing")
 	}
-	if got, want := compact.redrawInterval(time.Second), time.Second; got != want {
+	if got, want := compact.redrawInterval(time.Second, DefaultCompactPagingSettings()), time.Second; got != want {
 		t.Fatalf("redraw interval = %v, want %v", got, want)
+	}
+}
+
+func TestCompactRedrawIntervalFollowsPagingSettings(t *testing.T) {
+	compact, ok := ProfileByID(CompactProfileID)
+	if !ok {
+		t.Fatal("compact profile is missing")
+	}
+
+	if got, want := compact.redrawInterval(time.Minute, CompactPagingSettings{Auto: true, Interval: 30 * time.Second}), 30*time.Second; got != want {
+		t.Fatalf("configured redraw interval = %v, want %v", got, want)
+	}
+	if got, want := compact.redrawInterval(time.Minute, CompactPagingSettings{Auto: false, Interval: 30 * time.Second}), time.Minute; got != want {
+		t.Fatalf("disabled redraw interval = %v, want %v", got, want)
+	}
+	if got, want := compact.redrawInterval(time.Second, CompactPagingSettings{Auto: true, Interval: 30 * time.Second}), time.Second; got != want {
+		t.Fatalf("faster application override = %v, want %v", got, want)
 	}
 }

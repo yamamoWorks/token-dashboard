@@ -129,7 +129,8 @@ func run() error {
 	usageState := usage.NewState()
 	displayService := &display.Service{State: usageState, Logger: logger,
 		Hidden: func() ([]string, error) { return settings.HiddenLimits(settingsService) },
-		Show:   func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) }}
+		Show:   func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) },
+		Paging: func() display.CompactPagingSettings { return settings.CompactPaging(settingsService) }}
 	output := display.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
@@ -171,6 +172,7 @@ func run() error {
 	}
 	settingsService.OnStyleSaved = usageState.Touch
 	settingsService.OnProfileSaved = usageState.Touch
+	settingsService.OnPagingSaved = usageState.Touch
 	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(),
 		func() display.DisplayProfile { return settings.SelectedDisplayProfile(settingsService) },
 		func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)

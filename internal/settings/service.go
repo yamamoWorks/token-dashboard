@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
 	displaypkg "token-monitor-turzx/internal/display"
@@ -50,6 +51,8 @@ type View struct {
 	DisplayProfiles  []DisplayProfile `json:"displayProfiles"`
 	// LimitStyle is how Usage Limits are drawn: Gauges or Bars.
 	LimitStyle string `json:"limitStyle"`
+	CompactAutoPage            bool `json:"compactAutoPage"`
+	CompactPageIntervalSeconds int  `json:"compactPageIntervalSeconds"`
 }
 
 type SaveRequest struct {
@@ -64,6 +67,11 @@ type SaveRequest struct {
 	LimitStyle string `json:"limitStyle"`
 }
 
+type CompactPagingRequest struct {
+	Auto            bool `json:"auto"`
+	IntervalSeconds int  `json:"intervalSeconds"`
+}
+
 // file is the on-disk format described in docs/design/data.md.
 type file struct {
 	Source      string `json:"source"`
@@ -76,6 +84,10 @@ type file struct {
 	LimitStyle string `json:"limitStyle,omitempty"`
 	// HiddenLimits are the keys of the windows that are not drawn; absent means all are drawn.
 	HiddenLimits []string `json:"hiddenLimits,omitempty"`
+	// CompactAutoPage is nil in legacy settings; nil means enabled.
+	CompactAutoPage *bool `json:"compactAutoPage,omitempty"`
+	// CompactPageIntervalSeconds is absent in legacy settings; zero means 10 seconds.
+	CompactPageIntervalSeconds int `json:"compactPageIntervalSeconds,omitempty"`
 }
 
 type connection struct {
@@ -95,6 +107,8 @@ type Service struct {
 	OnStyleSaved func()
 	// OnProfileSaved tells the display that the logical size/layout changed. It must not block.
 	OnProfileSaved func()
+	// OnPagingSaved tells the display that compact paging behavior changed. It must not block.
+	OnPagingSaved func()
 }
 
 func New(path, appID string, list func() ([]turzx.Device, error), logger *slog.Logger) *Service {
@@ -133,6 +147,36 @@ func profileOf(saved file) displaypkg.DisplayProfile {
 		}
 	}
 	return displaypkg.DefaultProfile()
+}
+
+func compactAutoPageOf(saved file) bool {
+	if saved.CompactAutoPage == nil {
+		return true
+	}
+	return *saved.CompactAutoPage
+}
+
+func validCompactPageInterval(seconds int) bool {
+	switch seconds {
+	case 5, 10, 15, 30, 60:
+		return true
+	default:
+		return false
+	}
+}
+
+func compactPageIntervalSecondsOf(saved file) int {
+	if saved.CompactPageIntervalSeconds == 0 {
+		return 10
+	}
+	return saved.CompactPageIntervalSeconds
+}
+
+func compactPagingOf(saved file) displaypkg.CompactPagingSettings {
+	return displaypkg.CompactPagingSettings{
+		Auto:     compactAutoPageOf(saved),
+		Interval: time.Duration(compactPageIntervalSecondsOf(saved)) * time.Second,
+	}
 }
 
 func (s *Service) Save(req SaveRequest) (view View, err error) {
@@ -177,7 +221,12 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 	if req.LimitStyle != "" && req.LimitStyle != "Gauges" && req.LimitStyle != "Bars" {
 		fields["limitStyle"] = "Choose Gauges or Bars."
 	}
-	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID, DisplayProfileID: saved.DisplayProfileID, LimitStyle: saved.LimitStyle, HiddenLimits: saved.HiddenLimits}
+	next := file{
+		Source: saved.Source, Connection: saved.Connection, DisplayID: req.DisplayID,
+		DisplayProfileID: saved.DisplayProfileID, LimitStyle: saved.LimitStyle, HiddenLimits: saved.HiddenLimits,
+		CompactAutoPage: saved.CompactAutoPage, CompactPageIntervalSeconds: saved.CompactPageIntervalSeconds,
+	}
+	next.Source = req.Source
 	if req.DisplayProfileID != "" {
 		next.DisplayProfileID = req.DisplayProfileID
 	}
@@ -245,6 +294,9 @@ func (s *Service) read() (file, connection, error) {
 	} else if saved.Source != "Local" && saved.Source != "Hub" {
 		return saved, conn, unreadable
 	}
+	if saved.CompactPageIntervalSeconds != 0 && !validCompactPageInterval(saved.CompactPageIntervalSeconds) {
+		return saved, conn, unreadable
+	}
 	if saved.Connection == "" {
 		if saved.Source == "Hub" {
 			return saved, conn, unreadable
@@ -307,7 +359,44 @@ func viewOf(saved file, conn connection, devices []turzx.Device) View {
 		profiles = append(profiles, DisplayProfile{ID: profile.ID, Name: profile.Name, Width: profile.Width, Height: profile.Height})
 	}
 	profile := profileOf(saved)
-	return View{Source: saved.Source, URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays, DisplayProfileID: profile.ID, DisplayProfiles: profiles, LimitStyle: styleOf(saved)}
+	return View{
+		Source: saved.Source, URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays,
+		DisplayProfileID: profile.ID, DisplayProfiles: profiles, LimitStyle: styleOf(saved),
+		CompactAutoPage: compactAutoPageOf(saved), CompactPageIntervalSeconds: compactPageIntervalSecondsOf(saved),
+	}
+}
+
+// SaveCompactPaging validates and persists physical compact-display paging independently from preview paging.
+func (s *Service) SaveCompactPaging(req CompactPagingRequest) (view View, err error) {
+	defer func() { err = fault.Boundary(s.logger, "settings.saveCompactPaging", err) }()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !validCompactPageInterval(req.IntervalSeconds) {
+		return View{}, fault.Validation(map[string]string{
+			"compactPageIntervalSeconds": "Choose 5, 10, 15, 30, or 60 seconds.",
+		})
+	}
+	saved, conn, err := s.read()
+	if err != nil {
+		return View{}, err
+	}
+	devices, err := s.list()
+	if err != nil {
+		return View{}, err
+	}
+	before := compactPagingOf(saved)
+	auto := req.Auto
+	saved.CompactAutoPage = &auto
+	saved.CompactPageIntervalSeconds = req.IntervalSeconds
+	if err := s.write(saved); err != nil {
+		return View{}, err
+	}
+	s.logger.Info("settings_saved")
+	if after := compactPagingOf(saved); after != before && s.OnPagingSaved != nil {
+		s.OnPagingSaved()
+	}
+	return viewOf(saved, conn, devices), nil
 }
 
 // parseOrigin accepts only http(s)://host[:port] with an optional trailing slash.
@@ -342,6 +431,17 @@ func SelectedDisplayProfile(s *Service) displaypkg.DisplayProfile {
 		return displaypkg.DefaultProfile()
 	}
 	return profileOf(saved)
+}
+
+// CompactPaging returns the saved compact paging behavior, or legacy defaults when unavailable.
+func CompactPaging(s *Service) displaypkg.CompactPagingSettings {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	saved, _, err := s.read()
+	if err != nil {
+		return displaypkg.DefaultCompactPagingSettings()
+	}
+	return compactPagingOf(saved)
 }
 
 // HiddenLimits returns the saved keys of the windows that are not drawn. It is a function, not a

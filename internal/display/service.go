@@ -24,6 +24,7 @@ type Service struct {
 	// Hidden returns the saved keys of the windows that are not drawn, and Show saves the change.
 	Hidden func() ([]string, error)
 	Show   func(keys []string, shown bool) error
+	Paging func() CompactPagingSettings
 	Logger *slog.Logger
 
 	mu           sync.Mutex
@@ -125,7 +126,11 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 		if profile != nil {
 			selected = profile()
 		}
-		if interval := selected.redrawInterval(redraw); interval != activeInterval {
+		paging := DefaultCompactPagingSettings()
+		if s.Paging != nil {
+			paging = s.Paging()
+		}
+		if interval := selected.redrawInterval(redraw, paging); interval != activeInterval {
 			ticker.Reset(interval)
 			activeInterval = interval
 		}
@@ -133,7 +138,7 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 		visibleStats := withoutHidden(stats, hidden)
 		now := time.Now()
 		selectedStyle := style()
-		img := selected.Render(renderer, visibleStats, now, source, selectedStyle)
+		img := selected.RenderWithPaging(renderer, visibleStats, now, source, selectedStyle, paging)
 		output(img)
 
 		devicePreview, err := previewDataURL(img)

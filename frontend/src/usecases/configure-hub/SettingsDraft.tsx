@@ -1,21 +1,24 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { View } from '@bindings/token-monitor-turzx/internal/settings/models';
-import { getSettings, useSaveSettings } from '../../features/settings/queries';
+import { getSettings, useSaveCompactPaging, useSaveSettings } from '../../features/settings/queries';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { publicError } from '../../shared/errors';
 import { useDraftDirty } from '../../shared/ExitContext';
 
 type Scope = 'connection' | 'display';
 type DisplayChange = { display?: string; profile?: string; style?: string };
+type PagingChange = { auto?: boolean; intervalSeconds?: number };
 export const automatic = '__automatic__';
 
 function useDraft(saved: View) {
   const save = useSaveSettings();
+  const savePaging = useSaveCompactPaging();
   const [source, setSource] = useState(saved.source || 'Local');
   const [url, setURL] = useState(saved.url);
   const [token, setToken] = useState('');
   const [pending, setPending] = useState<DisplayChange>({});
+  const [pendingPaging, setPendingPaging] = useState<PagingChange>({});
   const [done, setDone] = useState(false);
   const [failed, setFailed] = useState<Scope | null>(null);
   const connectionDirty = source !== (saved.source || 'Local') || (source === 'Hub' && (url !== saved.url || token !== ''));
@@ -46,18 +49,34 @@ function useDraft(saved: View) {
       });
     } catch { setFailed('display'); } finally { setPending({}); }
   }
+  async function applyPaging(change: PagingChange) {
+    const auto = change.auto ?? pendingPaging.auto ?? saved.compactAutoPage;
+    const intervalSeconds = change.intervalSeconds ?? pendingPaging.intervalSeconds ?? saved.compactPageIntervalSeconds;
+    setPendingPaging(change);
+    setFailed(null);
+    try {
+      await savePaging.mutateAsync({ auto, intervalSeconds });
+    } catch { setFailed('display'); } finally { setPendingPaging({}); }
+  }
   return {
     saved, source, url, token, connectionDirty, done,
     display: pending.display ?? (saved.displayID || automatic),
     profile: pending.profile ?? saved.displayProfileID,
     style: pending.style ?? (saved.limitStyle || 'Gauges'),
+    compactAutoPage: pendingPaging.auto ?? saved.compactAutoPage,
+    compactPageIntervalSeconds: pendingPaging.intervalSeconds ?? saved.compactPageIntervalSeconds,
     setSource: edit(setSource), setURL: edit(setURL), setToken: edit(setToken),
     setDisplay: (display: string) => void applyDisplay({ display }),
     setProfile: (profile: string) => void applyDisplay({ profile }),
     setStyle: (style: string) => void applyDisplay({ style }),
-    saving: save.isPending,
-    errorFor: (scope: Scope) => failed === scope ? save.error : null,
-    fields: save.error ? publicError(save.error).fieldErrors ?? {} : {},
+    setCompactAutoPage: (auto: boolean) => void applyPaging({ auto }),
+    setCompactPageIntervalSeconds: (intervalSeconds: number) => void applyPaging({ intervalSeconds }),
+    saving: save.isPending || savePaging.isPending,
+    errorFor: (scope: Scope) => failed === scope ? (scope === 'display' ? savePaging.error ?? save.error : save.error) : null,
+    fields: (() => {
+      const activeError = failed === 'display' ? savePaging.error ?? save.error : save.error;
+      return activeError ? publicError(activeError).fieldErrors ?? {} : {};
+    })(),
     submitConnection: () => void submitConnection(),
   };
 }

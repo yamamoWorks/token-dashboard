@@ -1,11 +1,20 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Card, Group, Image, Text, Title } from '@mantine/core';
+import { Card, Group, Image, Select, Stack, Switch, Text, Title } from '@mantine/core';
 import { getPreview, previewRootKey, subscribePreview } from '../../features/display/queries';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { useSettingsDraft } from '../configure-hub/SettingsDraft';
 import { previewAspectRatio, previewWidth } from './preview';
 import styles from './UsagePreview.module.css';
+
+const compactProfileID = 'compact-gauge-480x320';
+const compactIntervals = [
+  { value: '5', label: '5 sec' },
+  { value: '10', label: '10 sec' },
+  { value: '15', label: '15 sec' },
+  { value: '30', label: '30 sec' },
+  { value: '60', label: '60 sec' },
+];
 
 // Shows the latest data for the selected preview page. Compact displays keep the page fixed until
 // the user clicks a page dot; TURZX automatic paging is independent from this window state.
@@ -17,6 +26,7 @@ export function UsagePreview({ title, control, children }: { title: string; cont
   const profile = draft?.profile;
   const aspectRatio = previewAspectRatio(draft?.saved.displayProfiles ?? [], profile);
   const width = previewWidth(draft?.saved.displayProfiles ?? [], profile);
+  const compact = profile === compactProfileID;
 
   useEffect(() => subscribePreview(() => void client.invalidateQueries({ queryKey: previewRootKey })), [client]);
   useEffect(() => setPage(0), [profile]);
@@ -30,16 +40,35 @@ export function UsagePreview({ title, control, children }: { title: string; cont
     {children}
     <ErrorNotice error={preview.error} />
     {preview.data?.image
-      ? <div className={styles.preview} style={{ width }}>
-          <Image src={preview.data.image} alt="Display preview" radius="sm" w="100%" style={{ aspectRatio }} />
-          {preview.data.pageCount > 1 && <div className={styles.pages} aria-label="Preview pages">
-            {Array.from({ length: preview.data.pageCount }, (_, index) =>
-              <button key={index} type="button" className={styles.page}
-                aria-label={`Preview page ${index + 1}`} aria-current={index === preview.data.page ? 'page' : undefined}
-                onClick={() => setPage(index)}>
-                {index === preview.data.page ? '●' : '○'}
-              </button>)}
-          </div>}
+      ? <div className={styles.previewRow}>
+          <div className={styles.preview} style={{ width }}>
+            <Image src={preview.data.image} alt="Display preview" radius="sm" w="100%" style={{ aspectRatio }} />
+            {preview.data.pageCount > 1 && <div className={styles.pages} aria-label="Preview pages">
+              {Array.from({ length: preview.data.pageCount }, (_, index) =>
+                <button key={index} type="button" className={styles.page}
+                  aria-label={`Preview page ${index + 1}`} aria-current={index === preview.data.page ? 'page' : undefined}
+                  onClick={() => setPage(index)}>
+                  {index === preview.data.page ? '●' : '○'}
+                </button>)}
+            </div>}
+          </div>
+          {compact && draft && <Stack gap="md" className={styles.pagingSettings}>
+            <Group justify="space-between" wrap="nowrap">
+              <Text fw={600}>Auto page</Text>
+              <Switch aria-label="Auto page" checked={draft.compactAutoPage}
+                disabled={draft.saving}
+                onChange={event => draft.setCompactAutoPage(event.currentTarget.checked)}
+                size="lg" onLabel="ON" offLabel="OFF" />
+            </Group>
+            <Group justify="space-between" wrap="nowrap">
+              <Text fw={600}>Interval</Text>
+              <Select aria-label="Page interval" w={150} data={compactIntervals}
+                value={String(draft.compactPageIntervalSeconds)} allowDeselect={false}
+                disabled={!draft.compactAutoPage || draft.saving}
+                error={draft.fields.compactPageIntervalSeconds}
+                onChange={value => { if (value) draft.setCompactPageIntervalSeconds(Number(value)); }} />
+            </Group>
+          </Stack>}
         </div>
       : !preview.error && <Text size="sm" c="dimmed">No image yet.</Text>}
   </Card>;
