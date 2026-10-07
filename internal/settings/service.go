@@ -166,10 +166,10 @@ func validCompactPageInterval(seconds int) bool {
 }
 
 func compactPageIntervalSecondsOf(saved file) int {
-	if validCompactPageInterval(saved.CompactPageIntervalSeconds) {
-		return saved.CompactPageIntervalSeconds
+	if saved.CompactPageIntervalSeconds == 0 {
+		return 10
 	}
-	return 10
+	return saved.CompactPageIntervalSeconds
 }
 
 func compactPagingOf(saved file) displaypkg.CompactPagingSettings {
@@ -292,6 +292,9 @@ func (s *Service) read() (file, connection, error) {
 	if saved.Source == "" {
 		saved.Source = "Local"
 	} else if saved.Source != "Local" && saved.Source != "Hub" {
+		return saved, conn, unreadable
+	}
+	if saved.CompactPageIntervalSeconds != 0 && !validCompactPageInterval(saved.CompactPageIntervalSeconds) {
 		return saved, conn, unreadable
 	}
 	if saved.Connection == "" {
