@@ -66,7 +66,7 @@ test('3.5インチの自動ページ送りを設定する', async ({ page, conte
       await expect.poll(async () => (await preview(page)).length).toBeGreaterThan(1000);
     });
 
-    let requests = hub.requests.length;
+    const requests = hub.requests.length;
     await test.step('手順1', async () => {
       await expect(autoPage()).toBeVisible();
       await expect(autoPage()).toBeChecked();
