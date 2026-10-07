@@ -63,14 +63,30 @@ func ProfileByID(id string) (DisplayProfile, bool) {
 // redrawInterval returns the shorter of the application's redraw interval and the profile-specific
 // maximum. This keeps test/server overrides effective while allowing layouts with time-based content
 // to refresh more often in the desktop app.
-func (p DisplayProfile) redrawInterval(appInterval time.Duration) time.Duration {
-	if p.maxRedrawInterval > 0 && p.maxRedrawInterval < appInterval {
-		return p.maxRedrawInterval
+func (p DisplayProfile) redrawInterval(appInterval time.Duration, paging ...CompactPagingSettings) time.Duration {
+	maxInterval := p.maxRedrawInterval
+	if p.ID == CompactProfileID && len(paging) > 0 {
+		compact := paging[0].normalized()
+		if compact.Auto {
+			maxInterval = compact.Interval
+		} else {
+			maxInterval = 0
+		}
+	}
+	if maxInterval > 0 && maxInterval < appInterval {
+		return maxInterval
 	}
 	return appInterval
 }
 
 // Render draws with this profile without mutating the renderer's legacy default layout.
 func (p DisplayProfile) Render(renderer *Renderer, stats *usage.Stats, now time.Time, source string, style Style) *image.RGBA {
+	return p.RenderWithPaging(renderer, stats, now, source, style, DefaultCompactPagingSettings())
+}
+
+func (p DisplayProfile) RenderWithPaging(renderer *Renderer, stats *usage.Stats, now time.Time, source string, style Style, paging CompactPagingSettings) *image.RGBA {
+	if compact, ok := p.Layout.(CompactGaugeLayout); ok {
+		return compact.RenderWithPaging(renderer, stats, now, source, style, paging)
+	}
 	return p.Layout.Render(renderer, stats, now, source, style)
 }
