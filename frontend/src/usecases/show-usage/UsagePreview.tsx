@@ -21,8 +21,9 @@ export function UsagePreview({ title, control, children }: { title: string; cont
   useEffect(() => subscribePreview(() => void client.invalidateQueries({ queryKey: previewRootKey })), [client]);
   useEffect(() => setPage(0), [profile]);
   useEffect(() => {
-    if (preview.data && preview.data.page !== page) setPage(preview.data.page);
-  }, [page, preview.data]);
+    const pageCount = preview.data?.pageCount ?? 0;
+    if (pageCount > 0 && page >= pageCount) setPage(pageCount - 1);
+  }, [page, preview.data?.pageCount]);
 
   return <Card withBorder padding="md">
     <Group gap="md" mb="sm"><Title order={4}>{title}</Title>{control}</Group>
