@@ -16,24 +16,6 @@ const compactIntervals = [
   { value: '60', label: '60 sec' },
 ];
 
-function CompactPagingSettingsMock() {
-  const [autoPage, setAutoPage] = useState(true);
-  const [interval, setInterval] = useState('10');
-
-  return <Stack gap="md" className={styles.pagingSettings}>
-    <Group justify="space-between" wrap="nowrap">
-      <Text fw={600}>Auto page</Text>
-      <Switch aria-label="Auto page" checked={autoPage} onChange={event => setAutoPage(event.currentTarget.checked)}
-        size="lg" onLabel="ON" offLabel="OFF" />
-    </Group>
-    <Group justify="space-between" wrap="nowrap">
-      <Text fw={600}>Interval</Text>
-      <Select aria-label="Page interval" w={150} data={compactIntervals} value={interval} allowDeselect={false}
-        disabled={!autoPage} onChange={value => { if (value) setInterval(value); }} />
-    </Group>
-  </Stack>;
-}
-
 // Shows the latest data for the selected preview page. Compact displays keep the page fixed until
 // the user clicks a page dot; TURZX automatic paging is independent from this window state.
 export function UsagePreview({ title, control, children }: { title: string; control?: ReactNode; children?: ReactNode }) {
@@ -70,7 +52,23 @@ export function UsagePreview({ title, control, children }: { title: string; cont
                 </button>)}
             </div>}
           </div>
-          {compact && <CompactPagingSettingsMock />}
+          {compact && draft && <Stack gap="md" className={styles.pagingSettings}>
+            <Group justify="space-between" wrap="nowrap">
+              <Text fw={600}>Auto page</Text>
+              <Switch aria-label="Auto page" checked={draft.compactAutoPage}
+                disabled={draft.saving}
+                onChange={event => draft.setCompactAutoPage(event.currentTarget.checked)}
+                size="lg" onLabel="ON" offLabel="OFF" />
+            </Group>
+            <Group justify="space-between" wrap="nowrap">
+              <Text fw={600}>Interval</Text>
+              <Select aria-label="Page interval" w={150} data={compactIntervals}
+                value={String(draft.compactPageIntervalSeconds)} allowDeselect={false}
+                disabled={!draft.compactAutoPage || draft.saving}
+                error={draft.fields.compactPageIntervalSeconds}
+                onChange={value => { if (value) draft.setCompactPageIntervalSeconds(Number(value)); }} />
+            </Group>
+          </Stack>}
         </div>
       : !preview.error && <Text size="sm" c="dimmed">No image yet.</Text>}
   </Card>;
