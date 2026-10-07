@@ -52,9 +52,9 @@ test('3.5インチのプレビューはページドットをクリックした�
     await expect(page.getByText('Saved.')).toBeVisible();
 
     await page.getByRole('link', { name: 'Display' }).click();
-    await page.getByLabel('Display profile').click();
+    await page.getByRole('textbox', { name: 'Display profile' }).click();
     await page.getByRole('option', { name: 'TURZX 3.5 Inch' }).click();
-    await expect(page.getByLabel('Display profile')).toHaveValue('TURZX 3.5 Inch');
+    await expect(page.getByRole('textbox', { name: 'Display profile' })).toHaveValue('TURZX 3.5 Inch');
 
     await expect.poll(() => hub.streams()).toBe(1);
     hub.send('snapshot', compactStats());
