@@ -55,3 +55,20 @@ func TestDisplayProfileRedrawIntervalKeepsFasterApplicationOverride(t *testing.T
 		t.Fatalf("redraw interval = %v, want %v", got, want)
 	}
 }
+
+func TestCompactRedrawIntervalFollowsPagingSettings(t *testing.T) {
+	compact, ok := ProfileByID(CompactProfileID)
+	if !ok {
+		t.Fatal("compact profile is missing")
+	}
+
+	if got, want := compact.redrawInterval(time.Minute, CompactPagingSettings{Auto: true, Interval: 30 * time.Second}), 30*time.Second; got != want {
+		t.Fatalf("configured redraw interval = %v, want %v", got, want)
+	}
+	if got, want := compact.redrawInterval(time.Minute, CompactPagingSettings{Auto: false, Interval: 30 * time.Second}), time.Minute; got != want {
+		t.Fatalf("disabled redraw interval = %v, want %v", got, want)
+	}
+	if got, want := compact.redrawInterval(time.Second, CompactPagingSettings{Auto: true, Interval: 30 * time.Second}), time.Second; got != want {
+		t.Fatalf("faster application override = %v, want %v", got, want)
+	}
+}
