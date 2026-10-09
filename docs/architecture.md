@@ -10,12 +10,12 @@ flowchart LR
   system["[System] Token Dashboard"]
   local["[External] この端末のAIツール利用記録と利用枠API"]
   hub["[External] Token Monitor Hub"]
-  turzx["[External] TURZX 9.2インチ USBディスプレイ"]
+  turzx["[External] TURZX 9.2インチ／3.5インチ Rev.A USBディスプレイ"]
   releases["[External] GitHub Releases"]
   user -->|"起動・終了、プレビューの確認、接続設定"| system
   local -->|"tokscaleによる利用状況"| system
   hub -->|"最新の利用状況（認証付きSSE）"| system
-  system -->|"表示画像（WinUSB）"| turzx
+  system -->|"表示画像（WinUSB／Serial）"| turzx
   releases -->|"更新情報とインストーラー"| system
 ```
 
@@ -51,9 +51,10 @@ flowchart LR
 
 - 選択した取得元からの取得、TURZX への送信、新版の確認は、それぞれ独立した goroutine で動かします。どれかの失敗や待機が、他の処理とタスクトレイ・ウィンドウの応答を止めないようにします。取得元を保存したら従前の取得処理を止め、選択した取得元だけを起動します。
 - TURZX への送信は1台に限り、逐次で行います。送信中に次の表示画像ができた場合は、最新の1枚だけを残して前の画像を捨てます。送信中に切断された画像は再送せず、再接続後に最新の画像を送ります。
-- 表示画像は 1920×462 で描き、TURZX へは時計回りに90度回転した Baseline JPEG（品質85）で送ります。プレビューには、回転前の同じ画像を渡します。
+- 表示プロファイルと物理デバイスの種類は別に扱い、機器選択でプロファイルを自動変更しません。画像サイズが機器に合わない場合は送信せず、原因をログに記録します。9.2インチは 1920×462 の表示画像を時計回りに90度回転した Baseline JPEG（品質85）として WinUSB で送り、3.5インチ Rev.A は 480×320 の表示画像を RGB565LE として Serial で送ります。プレビューには機器向けの変換前の画像を渡します。
 - 表示画像の描画には、Windows に標準で入っている游ゴシックを使います。フォントはアプリに同梱しません。
-- TURZX は、標準のインターフェース GUID `GUID_DEVINTERFACE_USB_DEVICE` のうち VID/PID が `1CBE:0092` のものとして列挙し、抜き差しを検出します。ドライバーの導入時に決まる GUID には依存しません（[確認した事実](project.md#design)）。
+- 9.2インチの TURZX は、標準のインターフェース GUID `GUID_DEVINTERFACE_USB_DEVICE` のうち VID/PID が `1CBE:0092` のものとして列挙し、抜き差しを検出します。ドライバーの導入時に決まる GUID には依存しません（[確認した事実](project.md#design)）。
+- 3.5インチ Rev.A は VID/PID `1A86:5722` とシリアル番号／PNP Device ID の `USB35INCHIPSV2` で識別します。機器の識別子とCOM番号を分け、抜き差し時は現在のCOMポートを再検出します。判定・送信・終了の条件は [対象系列](usecases/利用状況をUSBディスプレイに表示する/scenarios/3.5インチ%20Rev.A%20に表示する.md) に従います。
 - Hub の認証トークンは、本体から画面へ返しません。ログにも出しません。ログに書くのは、接続先を特定しない原因の分類だけです。
 - 本体は多重起動を防ぎます。2つ目の起動では、既に動いている本体のウィンドウを表示します。
 - 本番の画面は同梱したアセットだけを使います。外部のコンテンツにはアプリの権限を与えません。
