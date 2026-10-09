@@ -124,7 +124,7 @@ func (s *revASender) SendFrame(img *image.RGBA) error {
 	return nil
 }
 
-func (s *revASender) Exit() error { return nil }
+func (s *revASender) Exit() error { return s.write(revAResetCommand()) }
 func (s *revASender) Close() error {
 	if s.handle == 0 {
 		return nil

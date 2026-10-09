@@ -8,6 +8,9 @@ import (
 
 const revAWidth, revAHeight = 480, 320
 
+// revAResetCommand restarts the Rev.A controller, matching the 9.2-inch exit behavior.
+func revAResetCommand() []byte { return []byte{0, 0, 0, 0, 0, 101} }
+
 func revAOrientation() []byte {
 	cmd := make([]byte, 16)
 	cmd[5] = 121
