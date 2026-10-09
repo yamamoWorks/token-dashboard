@@ -109,16 +109,21 @@ func (s *revASender) write(data []byte) error {
 }
 
 func (s *revASender) SendFrame(img *image.RGBA) error {
-	pixels, err := revARGB565LE(img)
-	if err != nil {
+	if err := revACheckFrame(img); err != nil {
 		return err
 	}
-	if err := s.write(revABitmapCommand(revAWidth, revAHeight)); err != nil {
-		return fmt.Errorf("send TURZX Rev.A bitmap command: %w", err)
-	}
-	for _, chunk := range revAChunks(pixels) {
-		if err := s.write(chunk); err != nil {
-			return fmt.Errorf("send TURZX Rev.A image data: %w", err)
+	for i, r := range revARects() {
+		pixels, err := revARGB565LERect(img, r)
+		if err != nil {
+			return err
+		}
+		if err := s.write(revABitmapCommand(r.Min.X, r.Min.Y, r.Max.X-1, r.Max.Y-1)); err != nil {
+			return fmt.Errorf("send TURZX Rev.A bitmap command (rect %d %v): %w", i, r, err)
+		}
+		for _, chunk := range revAChunks(pixels) {
+			if err := s.write(chunk); err != nil {
+				return fmt.Errorf("send TURZX Rev.A image data (rect %d %v): %w", i, r, err)
+			}
 		}
 	}
 	return nil
