@@ -1,11 +1,12 @@
 package display
 
 import (
-	"bytes"
 	"context"
+	"fmt"
 	"image"
-	"image/jpeg"
 	"log/slog"
+	"slices"
+	"time"
 
 	"token-monitor-turzx/internal/turzx"
 )
@@ -32,11 +33,15 @@ func (o *Output) Submit(img *image.RGBA) {
 	o.pending <- img
 }
 
-// Run sends until ctx ends, then restarts the display so it returns to its start-up screen.
+// Run sends until ctx ends, then performs the device-specific exit and closes it.
 func (o *Output) Run(ctx context.Context) {
 	defer close(o.done)
-	var conn *turzx.Conn
+	var conn turzx.FrameSender
 	var connID, lastFailure string
+	var latest *image.RGBA
+	retry := false
+	retryTicker := time.NewTicker(time.Second)
+	defer retryTicker.Stop()
 	fail := func(event string, err error) {
 		// Log a failure once until it changes, not on every image.
 		if err.Error() != lastFailure {
@@ -44,67 +49,111 @@ func (o *Output) Run(ctx context.Context) {
 			o.logger.Warn(event, "cause", err)
 		}
 	}
+	trySend := func(img *image.RGBA) {
+		id, err := o.target()
+		if err != nil {
+			fail("turzx_target_failed", err)
+			retry = true
+			return
+		}
+		if id == "" {
+			if conn != nil {
+				conn.Close()
+				conn = nil
+			}
+			retry = true
+			return
+		}
+		if conn != nil && connID != id {
+			conn.Close()
+			conn = nil
+		}
+		if !frameMatchesDevice(id, img) {
+			dimensions := "nil"
+			if img != nil {
+				dimensions = fmt.Sprintf("%dx%d", img.Bounds().Dx(), img.Bounds().Dy())
+			}
+			fail("turzx_profile_mismatch", fmt.Errorf("selected TURZX device does not match %s frame; image skipped", dimensions))
+			retry = false
+			return
+		}
+		if conn == nil {
+			if conn, err = turzx.OpenFrameSender(id); err != nil {
+				conn = nil
+				fail("turzx_open_failed", err)
+				retry = true
+				return
+			}
+			connID = id
+		}
+		if err := conn.SendFrame(img); err != nil {
+			conn.Close()
+			conn = nil
+			fail("turzx_send_failed", err)
+			retry = true
+			return
+		}
+		retry = false
+		lastFailure = ""
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			if conn != nil {
-				if err := conn.Restart(); err != nil {
-					o.logger.Warn("turzx_restart_failed", "cause", err)
+				if err := conn.Exit(); err != nil {
+					o.logger.Warn("turzx_exit_failed", "cause", err)
 				}
 				conn.Close()
 			}
 			return
 		case img := <-o.pending:
-			id, err := o.target()
-			if err != nil {
-				fail("turzx_target_failed", err)
+			latest = img
+			trySend(latest)
+		case <-retryTicker.C:
+			gotFrame := false
+			select {
+			case img := <-o.pending:
+				latest = img
+				gotFrame = true
+			default:
+			}
+			if latest == nil {
 				continue
 			}
-			if conn != nil && connID != id {
-				conn.Close()
-				conn = nil
+			if gotFrame {
+				trySend(latest)
+				continue
 			}
-			if conn == nil {
-				if id == "" {
-					continue
-				}
-				if conn, err = turzx.Open(id); err != nil {
+			id, targetErr := o.target()
+			if targetErr == nil && conn != nil {
+				connected, listErr := turzx.List()
+				present := listErr == nil && slices.ContainsFunc(connected, func(d turzx.Device) bool { return d.ID == connID })
+				if id != connID || !present {
+					conn.Close()
 					conn = nil
-					fail("turzx_open_failed", err)
-					continue
+					retry = true
 				}
-				connID = id
 			}
-			var buf bytes.Buffer
-			if err := jpeg.Encode(&buf, rotateClockwise(img), &jpeg.Options{Quality: 85}); err != nil {
-				fail("turzx_encode_failed", err)
-				continue
+			if targetErr == nil && (conn == nil || id == "") {
+				retry = true
 			}
-			// A failed image is dropped; the next image reopens the device.
-			if err := conn.SendJPEG(buf.Bytes()); err != nil {
-				conn.Close()
-				conn = nil
-				fail("turzx_send_failed", err)
-				continue
+			if retry {
+				trySend(latest)
 			}
-			lastFailure = ""
 		}
 	}
+}
+
+func frameMatchesDevice(id string, img *image.RGBA) bool {
+	if img == nil {
+		return false
+	}
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	if turzx.IsRevA(id) {
+		return w == 480 && h == 320
+	}
+	return w == 1920 && h == 462
 }
 
 // Wait blocks until Run has returned.
 func (o *Output) Wait() { <-o.done }
-
-// rotateClockwise turns the 1920x462 image into the 462x1920 image the device expects.
-func rotateClockwise(src *image.RGBA) *image.RGBA {
-	b := src.Bounds()
-	dst := image.NewRGBA(image.Rect(0, 0, b.Dy(), b.Dx()))
-	for y := 0; y < b.Dy(); y++ {
-		for x := 0; x < b.Dx(); x++ {
-			s := src.PixOffset(b.Min.X+x, b.Min.Y+y)
-			d := dst.PixOffset(b.Dy()-1-y, x)
-			copy(dst.Pix[d:d+4], src.Pix[s:s+4])
-		}
-	}
-	return dst
-}

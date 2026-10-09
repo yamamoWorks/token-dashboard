@@ -1,4 +1,4 @@
-// Package turzx talks to TURZX 9.2-inch USB displays over WinUSB.
+// Package turzx talks to TURZX USB displays.
 package turzx
 
 import (
@@ -16,6 +16,10 @@ type Device struct {
 }
 
 const target = "vid_1cbe&pid_0092"
+
+const RevAID = `USB\VID_1A86&PID_5722\USB35INCHIPSV2`
+
+func IsRevA(id string) bool { return strings.EqualFold(id, RevAID) }
 
 // deviceID converts an interface path such as
 // \?\USB#VID_1CBE&PID_0092#633a6e01a48a0706#{guid} to its device instance ID.

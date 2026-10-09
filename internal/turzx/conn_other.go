@@ -4,6 +4,10 @@ package turzx
 
 import "errors"
 
+func openFrameSender(id string) (FrameSender, error) {
+	return nil, errors.New("TURZX displays are supported only on Windows")
+}
+
 // Conn is an open connection to one TURZX display.
 type Conn struct{}
 

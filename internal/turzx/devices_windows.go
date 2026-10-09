@@ -8,6 +8,8 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows/registry"
 )
 
 var (
@@ -55,7 +57,61 @@ func List() ([]Device, error) {
 		devices = append(devices, Device{ID: id, Name: displayName(id, product)})
 	}
 	slices.SortFunc(devices, func(a, b Device) int { return strings.Compare(a.ID, b.ID) })
+	serialDevices, err := listRevADevices()
+	if err != nil {
+		return nil, err
+	}
+	devices = append(devices, serialDevices...)
+	slices.SortFunc(devices, func(a, b Device) int { return strings.Compare(a.ID, b.ID) })
 	return devices, nil
+}
+
+func listRevADevices() ([]Device, error) {
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Enum\USB\VID_1A86&PID_5722`, registry.ENUMERATE_SUB_KEYS|registry.QUERY_VALUE)
+	if err != nil {
+		if err == syscall.ERROR_FILE_NOT_FOUND || err == syscall.ERROR_PATH_NOT_FOUND {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("enumerate TURZX Rev.A devices: %w", err)
+	}
+	defer key.Close()
+	instances, err := key.ReadSubKeyNames(-1)
+	if err != nil {
+		return nil, fmt.Errorf("read TURZX Rev.A instances: %w", err)
+	}
+	devices := make([]Device, 0, 1)
+	for _, instance := range instances {
+		if !strings.EqualFold(instance, "USB35INCHIPSV2") {
+			continue
+		}
+		if !revADevicePresent(instance) {
+			continue
+		}
+		params, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Enum\USB\VID_1A86&PID_5722\`+instance+`\Device Parameters`, registry.QUERY_VALUE)
+		if err != nil {
+			continue
+		}
+		port, _, err := params.GetStringValue("PortName")
+		params.Close()
+		if err != nil || !strings.HasPrefix(strings.ToUpper(port), "COM") {
+			continue
+		}
+		id := RevAID
+		devices = append(devices, Device{ID: id, Name: displayName(id, "TURZX 3.5 Inch")})
+	}
+	return devices, nil
+}
+
+func revADevicePresent(instance string) bool {
+	id, err := syscall.UTF16PtrFromString(`USB\VID_1A86&PID_5722\` + instance)
+	if err != nil {
+		return false
+	}
+	var node uint32
+	if r, _, _ := procLocateDevNode.Call(uintptr(unsafe.Pointer(&node)), uintptr(unsafe.Pointer(id)), 0); r != crSuccess {
+		return false
+	}
+	return true
 }
 
 func interfacePaths() ([]string, error) {
