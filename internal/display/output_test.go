@@ -127,12 +127,11 @@ func TestOutputKeepsRapidOffOnTransitionsInOrder(t *testing.T) {
 		return countEvent(e, "exit") == 1 && countEvent(e, "open") == 2 && countEvent(e, "send") == 2
 	})
 	events, _ := spy.snapshot()
-	got := events[:7]
 	want := []string{"open", "send", "exit", "close", "open", "send"}
 	if len(events) < len(want) {
 		t.Fatalf("events %v, want prefix %v", events, want)
 	}
-	got = events[:len(want)]
+	got := events[:len(want)]
 	for i := range want {
 		if got[i] != want[i] { t.Fatalf("events %v, want prefix %v", events, want) }
 	}
