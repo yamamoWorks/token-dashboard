@@ -23,6 +23,7 @@ import (
 	"token-monitor-turzx/internal/desktop"
 	"token-monitor-turzx/internal/diagnostics"
 	"token-monitor-turzx/internal/display"
+	"token-monitor-turzx/internal/displaypower"
 	"token-monitor-turzx/internal/fault"
 	"token-monitor-turzx/internal/hub"
 	"token-monitor-turzx/internal/localusage"
@@ -132,6 +133,7 @@ func run() error {
 		Show:   func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) },
 		Paging: func() display.CompactPagingSettings { return settings.CompactPaging(settingsService) }}
 	output := display.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
+	powerMonitor := displaypower.New(output.SetEnabled, logger)
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
 	options := application.Options{
@@ -141,6 +143,7 @@ func run() error {
 		MarshalError: fault.Marshal,
 		ShouldQuit:   controls.ShouldQuit,
 		OnShutdown: func() {
+			powerMonitor.Close()
 			stop()
 			if !serverMode {
 				output.Wait()
@@ -163,6 +166,9 @@ func run() error {
 				window.Focus()
 			}
 		}}
+	}
+	if !serverMode {
+		options.Windows.WndProcInterceptor = powerMonitor.Intercept
 	}
 	app = application.New(options)
 	sink := func(*image.RGBA) {}
