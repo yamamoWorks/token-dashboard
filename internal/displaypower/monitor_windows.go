@@ -21,6 +21,9 @@ const (
 
 var (
 	user32 = windows.NewLazySystemDLL("user32.dll")
+	// Copying from the WM_POWERBROADCAST lParam via a Win32 call avoids
+	// converting an untracked uintptr into a Go unsafe.Pointer.
+	moveMemory = windows.NewLazySystemDLL("kernel32.dll").NewProc("RtlMoveMemory")
 	registerPowerSettingNotification = user32.NewProc("RegisterPowerSettingNotification")
 	unregisterPowerSettingNotification = user32.NewProc("UnregisterPowerSettingNotification")
 	sessionDisplayStatus = windows.GUID{
@@ -96,11 +99,19 @@ func displayState(lParam uintptr) (on bool, ok bool) {
 	if lParam == 0 {
 		return false, false
 	}
-	p := (*powerBroadcastSetting)(unsafe.Pointer(lParam))
-	if p.PowerSetting != sessionDisplayStatus || p.DataLength != 4 {
+	// The fixed POWERBROADCAST_SETTING prefix is 20 bytes; validate its
+	// GUID and length before reading the following 4-byte display state.
+	var header struct {
+		PowerSetting windows.GUID
+		DataLength uint32
+	}
+	moveMemory.Call(uintptr(unsafe.Pointer(&header)), lParam, unsafe.Sizeof(header))
+	if header.PowerSetting != sessionDisplayStatus || header.DataLength != 4 {
 		return false, false
 	}
-	switch *(*uint32)(unsafe.Pointer(lParam + unsafe.Offsetof(powerBroadcastSetting{}.Data))) {
+	var state uint32
+	moveMemory.Call(uintptr(unsafe.Pointer(&state)), lParam+unsafe.Sizeof(header), 4)
+	switch state {
 	case 0:
 		return false, true
 	case 1:
