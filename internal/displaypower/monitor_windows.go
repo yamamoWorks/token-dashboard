@@ -1,6 +1,6 @@
 //go:build windows && !server
 
-// Package displaypower listens for Windows session-display power notifications.
+// Package displaypower listens for Windows display power and session lock notifications.
 package displaypower
 
 import (
@@ -12,10 +12,13 @@ import (
 )
 
 const (
-	wmCreate             = 0x0001
-	wmNCDestroy          = 0x0082
-	wmPowerBroadcast     = 0x0218
-	pbtAPMSuspend        = 0x0004
+	wmCreate              = 0x0001
+	wmNCDestroy           = 0x0082
+	wmPowerBroadcast      = 0x0218
+	wmWTSSessionChange    = 0x02B1
+	wtsSessionLock        = 0x0007
+	wtsSessionUnlock      = 0x0008
+	pbtAPMSuspend         = 0x0004
 	pbtPowerSettingChange = 0x8013
 )
 
@@ -23,10 +26,13 @@ var (
 	user32 = windows.NewLazySystemDLL("user32.dll")
 	// Copying from the WM_POWERBROADCAST lParam via a Win32 call avoids
 	// converting an untracked uintptr into a Go unsafe.Pointer.
-	moveMemory = windows.NewLazySystemDLL("kernel32.dll").NewProc("RtlMoveMemory")
-	registerPowerSettingNotification = user32.NewProc("RegisterPowerSettingNotification")
+	moveMemory                         = windows.NewLazySystemDLL("kernel32.dll").NewProc("RtlMoveMemory")
+	registerPowerSettingNotification   = user32.NewProc("RegisterPowerSettingNotification")
 	unregisterPowerSettingNotification = user32.NewProc("UnregisterPowerSettingNotification")
-	sessionDisplayStatus = windows.GUID{
+	wtsapi32                           = windows.NewLazySystemDLL("wtsapi32.dll")
+	registerSessionNotification        = wtsapi32.NewProc("WTSRegisterSessionNotification")
+	unregisterSessionNotification      = wtsapi32.NewProc("WTSUnRegisterSessionNotification")
+	sessionDisplayStatus               = windows.GUID{
 		Data1: 0x2B84C20E, Data2: 0xAD23, Data3: 0x4DDF,
 		Data4: [8]byte{0x93, 0xDB, 0x05, 0xFF, 0xBD, 0x7E, 0xFC, 0xA5},
 	}
@@ -42,15 +48,19 @@ type powerBroadcastSetting struct {
 // application HWND for registration; Wails keeps its main-thread HWND alive
 // even when the visible settings window is hidden in the tray.
 type Monitor struct {
-	mu     sync.Mutex
-	hwnd   uintptr
-	handle uintptr
-	logger *slog.Logger
-	onDisplay func(bool)
+	mu                sync.Mutex
+	hwnd              uintptr
+	handle            uintptr
+	sessionRegistered bool
+	displayOn         bool
+	locked            bool
+	enabled           bool
+	logger            *slog.Logger
+	onDisplay         func(bool)
 }
 
 func New(onDisplay func(bool), logger *slog.Logger) *Monitor {
-	return &Monitor{onDisplay: onDisplay, logger: logger}
+	return &Monitor{onDisplay: onDisplay, logger: logger, displayOn: true, enabled: true}
 }
 
 // Intercept observes messages but lets Wails handle every message normally.
@@ -58,12 +68,23 @@ func (m *Monitor) Intercept(hwnd uintptr, msg uint32, wParam, lParam uintptr) (u
 	switch msg {
 	case wmCreate:
 		m.mu.Lock()
-		if m.handle == 0 && hwnd != 0 {
+		if m.hwnd == 0 && hwnd != 0 {
+			m.hwnd = hwnd
+		}
+		if hwnd == m.hwnd && hwnd != 0 && m.handle == 0 {
 			handle, _, err := registerPowerSettingNotification.Call(hwnd, uintptr(unsafe.Pointer(&sessionDisplayStatus)), 0)
 			if handle == 0 {
 				m.logger.Warn("display_power_registration_failed", "cause", err)
 			} else {
-				m.hwnd, m.handle = hwnd, handle
+				m.handle = handle
+			}
+		}
+		if hwnd == m.hwnd && hwnd != 0 && !m.sessionRegistered {
+			// NOTIFY_FOR_THIS_SESSION (0) excludes other users' sessions.
+			if r, _, err := registerSessionNotification.Call(hwnd, 0); r == 0 {
+				m.logger.Warn("session_notification_registration_failed", "cause", err)
+			} else {
+				m.sessionRegistered = true
 			}
 		}
 		m.mu.Unlock()
@@ -76,22 +97,48 @@ func (m *Monitor) Intercept(hwnd uintptr, msg uint32, wParam, lParam uintptr) (u
 	case wmPowerBroadcast:
 		// Handle only messages delivered to the registered HWND.
 		m.mu.Lock()
-		registered := hwnd == m.hwnd && m.handle != 0
-		m.mu.Unlock()
-		if !registered {
+		defer m.mu.Unlock()
+		if hwnd != m.hwnd || m.handle == 0 {
 			break
 		}
 		switch wParam {
 		case pbtAPMSuspend:
 			// Best effort; a machine may suspend before the reset completes.
-			m.onDisplay(false)
+			m.displayOn = false
+			m.notify()
 		case pbtPowerSettingChange:
 			if on, ok := displayState(lParam); ok {
-				m.onDisplay(on)
+				m.displayOn = on
+				m.notify()
 			}
+		}
+	case wmWTSSessionChange:
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if hwnd != m.hwnd || !m.sessionRegistered {
+			break
+		}
+		switch wParam {
+		case wtsSessionLock:
+			m.locked = true
+			m.notify()
+		case wtsSessionUnlock:
+			m.locked = false
+			m.notify()
 		}
 	}
 	return 0, false
+}
+
+// notify must be called with m.mu held. Output queues transitions without doing USB I/O.
+func (m *Monitor) notify() {
+	enabled := m.displayOn && !m.locked
+	if m.enabled == enabled {
+		return
+	}
+	m.enabled = enabled
+	m.logger.Info("display_transfer_state", "enabled", enabled, "display_on", m.displayOn, "locked", m.locked)
+	m.onDisplay(enabled)
 }
 
 // displayState recognizes OFF and ON; DIMMED(2) and unrelated GUIDs are ignored.
@@ -103,7 +150,7 @@ func displayState(lParam uintptr) (on bool, ok bool) {
 	// GUID and length before reading the following 4-byte display state.
 	var header struct {
 		PowerSetting windows.GUID
-		DataLength uint32
+		DataLength   uint32
 	}
 	moveMemory.Call(uintptr(unsafe.Pointer(&header)), lParam, unsafe.Sizeof(header))
 	if header.PowerSetting != sessionDisplayStatus || header.DataLength != 4 {
@@ -123,6 +170,12 @@ func displayState(lParam uintptr) (on bool, ok bool) {
 
 // unregister must be called with m.mu held.
 func (m *Monitor) unregister() {
+	if m.sessionRegistered {
+		if r, _, err := unregisterSessionNotification.Call(m.hwnd); r == 0 {
+			m.logger.Warn("session_notification_unregistration_failed", "cause", err)
+		}
+		m.sessionRegistered = false
+	}
 	if m.handle != 0 {
 		if r, _, err := unregisterPowerSettingNotification.Call(m.handle); r == 0 {
 			m.logger.Warn("display_power_unregistration_failed", "cause", err)
