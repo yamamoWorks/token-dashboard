@@ -106,6 +106,7 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 | TURZX 実機の列挙 | `$env:TURZX_DEVICE_TEST='1'; go test -run TestListConnected -v ./internal/turzx` | 接続中の TURZX が `TURZX1.0 (633A6E01)` の形式の表示名で列挙されます。TURZX を接続した PC で手動で実行します |
 | 文書検査 | `python scripts/doc_check.py .` | NG が0件です |
 | 更新の E2E | `node scripts/run.mjs test:desktop` | 「起動時に取得した新版で更新して再起動する」の E2E が合格します。v0.1.0 と v0.2.0 のインストーラーを作り、実際にインストールして更新し、最後にアンインストールします。動いている Token Dashboard をすべて止め、インストールしていない状態で、手元で実行します。`verify` には含めません |
+| ロックの実機 E2E | `npm --prefix frontend run test:e2e -- --grep @lock-desktop --workers=1` | 実 Hub・USB に接続したデスクトップを1個起動し、`LOCK_E2E_PID`（プロセス ID）、`LOCK_E2E_PORT`（選択機器の COM ポート）、`LOCK_E2E_LOG`（アプリのログファイル）、`LOCK_E2E_CDP`（`WAILS_WEBVIEW_DEBUG_PORT` の HTTP URL）を設定します。通知用ドライバーをビルドし、ネイティブ通知から接続解放、ロック中のプレビュー更新、再接続まで検証します。画面の選択状態と転送状態は終了時に復元します。実際の Windows ロック操作と液晶表示は利用者が確認します。環境変数のない `verify` ではスキップします |
 | インストーラーの作成 | `node scripts/run.mjs package` | `bin\token-monitor-turzx-<版>-amd64-setup.exe` ができます。版は `build/app.json` の `version` です。リリースの版はタグで決まるため、`build/app.json` の `version` は上げません |
 | リリース | `mise run release:tag`（版を指定するときは `mise run release:tag 1.2.0`） | 最新のタグ（タグがなければ `build/app.json` の `version`）の patch を1つ上げた `v<版>` のタグを、指定したときはその版のタグを push します。コミットしていない変更がない状態で、`origin/main` に含まれるコミットで実行します。push したタグで CI が検証、インストーラーの作成、`update.json` の署名、GitHub Releases の最新リリースへの公開を行い、各 PC のアプリが次の起動時に新版として取得します |
 
