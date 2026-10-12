@@ -1,7 +1,9 @@
 package display
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"image"
 	"io"
 	"log/slog"
@@ -12,10 +14,96 @@ import (
 	"token-monitor-turzx/internal/turzx"
 )
 
+type interruptedOutputSender struct {
+	spy              *outputSpy
+	started, release chan struct{}
+	once             sync.Once
+}
+
+func (s *interruptedOutputSender) SendFrame(img *image.RGBA) error {
+	s.once.Do(func() { close(s.started); <-s.release })
+	s.spy.add("send", img)
+	return nil
+}
+func (s *interruptedOutputSender) Exit() error {
+	s.spy.add("exit", nil)
+	return errors.New("reset failed for test")
+}
+func (s *interruptedOutputSender) Close() error { s.spy.add("close", nil); return nil }
+
+func TestLockDuringTransferSerializesResetFailureAndLatestFrame(t *testing.T) {
+	for _, tc := range []struct {
+		name, id string
+		w, h     int
+	}{
+		{"RevA", turzx.RevAID, 480, 320},
+		{"9.2inch", "test-9.2inch", 1920, 462},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spy := newOutputSpy()
+			var logs bytes.Buffer
+			o := NewOutput(func() (string, error) { return tc.id, nil }, slog.New(slog.NewTextHandler(&logs, nil)))
+			blocked := &interruptedOutputSender{spy: spy, started: make(chan struct{}), release: make(chan struct{})}
+			opens := 0
+			o.open = func(string) (turzx.FrameSender, error) {
+				spy.add("open", nil)
+				opens++
+				if opens == 1 {
+					return blocked, nil
+				}
+				return &fakeOutputSender{spy: spy}, nil
+			}
+			o.list = func() ([]turzx.Device, error) { return []turzx.Device{{ID: tc.id}}, nil }
+			ctx, cancel := context.WithCancel(context.Background())
+			var release sync.Once
+			go o.Run(ctx)
+			defer func() { release.Do(func() { close(blocked.release) }); cancel(); o.Wait() }()
+			frame := func() *image.RGBA { return image.NewRGBA(image.Rect(0, 0, tc.w, tc.h)) }
+			o.Submit(frame())
+			select {
+			case <-blocked.started:
+			case <-time.After(3 * time.Second):
+				t.Fatal("transfer did not start")
+			}
+			o.SetEnabled(false)
+			o.SetEnabled(false)
+			o.Submit(frame())
+			latest := frame()
+			o.Submit(latest)
+			o.SetEnabled(true) // Unlock arrives before the in-flight transfer finishes.
+			events, _ := spy.snapshot()
+			if len(events) != 1 || events[0] != "open" {
+				t.Fatalf("reset raced with send: %v", events)
+			}
+			release.Do(func() { close(blocked.release) })
+			spy.await(t, func(e []string, f []*image.RGBA) bool { return len(f) == 2 })
+			// Stop the sender before reading the log buffer or final event sequence.
+			cancel()
+			o.Wait()
+			events, frames := spy.snapshot()
+			want := []string{"open", "send", "exit", "close", "open", "send", "exit", "close"}
+			if len(events) != len(want) {
+				t.Fatalf("events: %v", events)
+			}
+			for i := range want {
+				if events[i] != want[i] {
+					t.Fatalf("events: %v", events)
+				}
+			}
+			if frames[1] != latest {
+				t.Fatal("unlock sent an obsolete frame")
+			}
+			if !bytes.Contains(logs.Bytes(), []byte("turzx_exit_failed")) {
+				t.Fatal("reset failure was not logged")
+			}
+		})
+	}
+}
+
 type outputSpy struct {
-	mu sync.Mutex
-	events []string
-	frames []*image.RGBA
+	mu      sync.Mutex
+	events  []string
+	frames  []*image.RGBA
 	changed chan struct{}
 }
 
@@ -28,7 +116,10 @@ func (s *outputSpy) add(event string, img *image.RGBA) {
 		s.frames = append(s.frames, img)
 	}
 	s.mu.Unlock()
-	select { case s.changed <- struct{}{}: default: }
+	select {
+	case s.changed <- struct{}{}:
+	default:
+	}
 }
 
 func (s *outputSpy) snapshot() ([]string, []*image.RGBA) {
@@ -39,11 +130,13 @@ func (s *outputSpy) snapshot() ([]string, []*image.RGBA) {
 
 func (s *outputSpy) await(t *testing.T, want func([]string, []*image.RGBA) bool) {
 	t.Helper()
-	timeout := time.NewTimer(3*time.Second)
+	timeout := time.NewTimer(3 * time.Second)
 	defer timeout.Stop()
 	for {
 		events, frames := s.snapshot()
-		if want(events, frames) { return }
+		if want(events, frames) {
+			return
+		}
 		select {
 		case <-s.changed:
 		case <-timeout.C:
@@ -52,13 +145,18 @@ func (s *outputSpy) await(t *testing.T, want func([]string, []*image.RGBA) bool)
 	}
 }
 
-type fakeOutputSender struct { spy *outputSpy }
+type fakeOutputSender struct{ spy *outputSpy }
+
 func (s *fakeOutputSender) SendFrame(img *image.RGBA) error { s.spy.add("send", img); return nil }
-func (s *fakeOutputSender) Exit() error { s.spy.add("exit", nil); return nil }
-func (s *fakeOutputSender) Close() error { s.spy.add("close", nil); return nil }
+func (s *fakeOutputSender) Exit() error                     { s.spy.add("exit", nil); return nil }
+func (s *fakeOutputSender) Close() error                    { s.spy.add("close", nil); return nil }
 
 func countEvent(events []string, name string) (count int) {
-	for _, event := range events { if event == name { count++ } }
+	for _, event := range events {
+		if event == name {
+			count++
+		}
+	}
 	return count
 }
 
@@ -133,7 +231,9 @@ func TestOutputKeepsRapidOffOnTransitionsInOrder(t *testing.T) {
 	}
 	got := events[:len(want)]
 	for i := range want {
-		if got[i] != want[i] { t.Fatalf("events %v, want prefix %v", events, want) }
+		if got[i] != want[i] {
+			t.Fatalf("events %v, want prefix %v", events, want)
+		}
 	}
 }
 
@@ -151,7 +251,9 @@ func TestOutputStartsPausedWhenPowerOffArrivesBeforeRun(t *testing.T) {
 	o.Submit(image.NewRGBA(image.Rect(0, 0, 480, 320)))
 	time.Sleep(150 * time.Millisecond)
 	events, _ := spy.snapshot()
-	if len(events) != 0 { t.Fatalf("unexpected device access while initially OFF: %v", events) }
+	if len(events) != 0 {
+		t.Fatalf("unexpected device access while initially OFF: %v", events)
+	}
 	o.SetEnabled(true)
 	spy.await(t, func(e []string, _ []*image.RGBA) bool { return countEvent(e, "send") == 1 })
 }
