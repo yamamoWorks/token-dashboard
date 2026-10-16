@@ -1,0 +1,121 @@
+name: Upstream sync intake
+
+on:
+  workflow_dispatch:
+    inputs:
+      full_rescan:
+        description: Reanalyze all changes from the common ancestor
+        type: boolean
+        default: false
+  schedule:
+    # Weekly, Monday 09:00 JST (Sunday 00:00 UTC)
+    - cron: '0 0 * * 0'
+
+concurrency:
+  group: upstream-sync-intake
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    # Never run this workflow outside the designated fork.
+    if: github.repository == 'yamamoWorks/token-dashboard'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      changed: ${{ steps.inventory.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch upstream (read-only)
+        run: |
+          git remote add upstream https://github.com/nuitsjp/token-dashboard.git
+          git fetch --no-tags upstream main:refs/remotes/upstream/main
+      - name: Collector unit tests
+        run: python3 -m unittest discover -s scripts -p 'test_upstream_sync.py'
+      - name: Read previous intake state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/upstream_sync.py state \
+            --repository "$GITHUB_REPOSITORY" \
+            --output "$RUNNER_TEMP/upstream-sync-previous.txt"
+      - name: Inventory commits and overlaps
+        id: inventory
+        env:
+          FULL_RESCAN: ${{ inputs.full_rescan || 'false' }}
+        run: |
+          mkdir -p .tmp/upstream-sync
+          if [ "$FULL_RESCAN" = 'true' ]; then
+            python3 scripts/upstream_sync.py collect \
+              --full --output .tmp/upstream-sync
+          else
+            python3 scripts/upstream_sync.py collect \
+              --since "$(cat "$RUNNER_TEMP/upstream-sync-previous.txt")" \
+              --output .tmp/upstream-sync
+          fi
+          python3 - <<'PY'
+          import json, os
+          d = json.load(open('.tmp/upstream-sync/metadata.json', encoding='utf-8'))
+          changed = d['new_commit_count'] > 0 or d['full_rescan']
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+              f.write('changed=' + str(changed).lower() + '\n')
+          print('Publish new intake:', changed)
+          PY
+      - name: Detect optional AI key
+        id: api
+        if: steps.inventory.outputs.changed == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -n "$OPENAI_API_KEY" ]; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Analyze with Codex (read-only)
+        if: steps.inventory.outputs.changed == 'true' && steps.api.outputs.enabled == 'true'
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ':read-only'
+          allow-bots: 'true'
+          effort: low
+          prompt-file: .github/upstream-sync/analysis-prompt.md
+          output-file: .tmp/upstream-sync/ai-analysis.md
+      - name: Save inventory
+        if: steps.inventory.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-sync-report
+          path: .tmp/upstream-sync/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: collect
+    if: needs.collect.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: upstream-sync-report
+          path: .tmp/upstream-sync
+      - name: Update one tracker Issue in the fork
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/upstream_sync.py publish \
+            --repository "$GITHUB_REPOSITORY" \
+            --directory .tmp/upstream-sync
