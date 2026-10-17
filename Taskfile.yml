@@ -50,7 +50,7 @@ tasks:
   package:prepared:
     cmds: [node scripts/build.mjs package]
   test:core:
-    cmds: [go test ./internal/... ./cmd/release/...]
+    cmds: [go test . ./internal/... ./cmd/release/...]
   # 画面の検査と検証用サーバーのビルドは frontend/ を書き換えるため、この順に1本で実行する。
   # 型検査は検証用サーバーの画面ビルドに含まれる。
   check:frontend:
@@ -59,7 +59,7 @@ tasks:
       - npm --prefix frontend run test
       - task: build:server
   check:go:
-    cmds: [go test ./internal/... ./cmd/release/...]
+    cmds: [go test . ./internal/... ./cmd/release/...]
   check:vet:
     cmds: [go vet ./...]
   check:vet-server:
