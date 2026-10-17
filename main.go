@@ -20,6 +20,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 
 	"token-monitor-turzx/internal/appstate"
+	"token-monitor-turzx/internal/compact"
 	"token-monitor-turzx/internal/desktop"
 	"token-monitor-turzx/internal/diagnostics"
 	"token-monitor-turzx/internal/display"
@@ -29,7 +30,6 @@ import (
 	"token-monitor-turzx/internal/presence"
 	"token-monitor-turzx/internal/settings"
 	"token-monitor-turzx/internal/styles"
-	"token-monitor-turzx/internal/turzx"
 	"token-monitor-turzx/internal/updates"
 	"token-monitor-turzx/internal/usage"
 )
@@ -41,8 +41,8 @@ var webAssets embed.FS
 var configJSON []byte
 
 // Fixed at build time through -ldflags -X (see scripts/build.mjs): the release CI sets
-// the version from the tag, and the desktop E2E also sets a local update source.
-// An empty value keeps the one in build/app.json.
+// the version from the tag. Rev.A intentionally ignores all update-source
+// overrides until it has its own trusted release channel.
 var buildVersion, buildUpdateSource, buildUpdatePublicKey string
 
 type appConfig struct {
@@ -52,6 +52,12 @@ type appConfig struct {
 	Version         string `json:"version"`
 	UpdateSource    string `json:"updateSource"`
 	UpdatePublicKey string `json:"updatePublicKey"`
+}
+
+// disableUpdates prevents an upstream (or build-time overridden) updater from
+// replacing a fork-built Rev.A binary. A trusted fork release channel is TBD.
+func disableUpdates(cfg *appConfig) {
+	cfg.UpdateSource, cfg.UpdatePublicKey = "", ""
 }
 
 func main() {
@@ -71,6 +77,8 @@ func run() error {
 			*target = value
 		}
 	}
+	// Ignore embedded and linker-supplied upstream updater settings for Rev.A.
+	disableUpdates(&cfg)
 	if cfg.ID == "" || cfg.Name == "" {
 		return fmt.Errorf("build/app.json: id and name are required")
 	}
@@ -116,25 +124,26 @@ func run() error {
 		}
 	}
 	controls := &desktop.Controls{Emit: emit}
-	settingsService := settings.New(filepath.Join(dir, "settings.json"), cfg.ID, turzx.List, logger)
+	settingsService := settings.New(filepath.Join(dir, "settings.json"), cfg.ID, compact.ListDevices, logger)
 	info := desktop.Info{Name: cfg.Name, Version: cfg.Version, AppID: cfg.ID, Server: serverMode, UpdateConfigured: cfg.UpdateSource != "" && cfg.UpdatePublicKey != "", DiagnosticsAvailable: diagnosticsAvailable}
 	appService := desktop.New(info, state, controls, logger)
 	styleService := styles.New(filepath.Join(dir, "styles"), logger)
 	updateConfig := updates.Config{
 		AppID: cfg.ID, Version: cfg.Version, Arch: runtime.GOARCH, Source: cfg.UpdateSource, PublicKey: cfg.UpdatePublicKey,
-		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
+		CacheDir: filepath.Join(dir, "updates"), Enabled: false,
 	}
 	updateService := updates.New(updateConfig, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
 	usageState := usage.NewState()
+	compactState := usage.NewState()
 	displayService := &display.Service{State: usageState, Logger: logger, Cycle: func() (bool, time.Duration) {
-		on, seconds := settings.CycleSetting(settingsService)
-		return on, cycleEvery(seconds)
+		// Compact.Mirror is the only page-rotation owner.
+		return false, compact.PageInterval
 	},
 		Hidden:     func() ([]string, error) { return settings.HiddenLimits(settingsService) },
 		Show:       func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) },
 		ShiftEvery: shiftInterval()}
 	renderer := display.NewCanvasRenderer(displayService, emit)
-	output := display.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
+	output := compact.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
 	options := application.Options{
@@ -181,7 +190,9 @@ func run() error {
 		idleAfter = func() int { return math.MaxInt32 }
 	}
 	go presence.Watch(ctx, conditions, idleAfter)
-	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
+	mirror := &compact.Mirror{All: usageState, Compact: compactState, Hidden: displayService.Hidden, Logger: logger}
+	go mirror.Run(ctx)
+	go display.Run(ctx, displayService, renderer, compactState, redrawInterval(), func() display.Style { return display.Style("Compact") }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
 		select {
@@ -248,14 +259,16 @@ func run() error {
 		})
 		updateReady = func(version string) { setUpdate("Update and restart (v" + version + ")") }
 	}
-	if serverMode {
-		// Server mode has no tray and never emits ApplicationStarted.
-		go updates.Run(ctx, updateService, updateReady)
-	} else {
-		// The tray menu can be rebuilt only once the application is running.
-		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+	// No upstream update check is scheduled. Keep the existing service and tray
+	// hooks dormant until a separate, trusted Rev.A update source is available.
+	if info.UpdateConfigured {
+		if serverMode {
 			go updates.Run(ctx, updateService, updateReady)
-		})
+		} else {
+			app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+				go updates.Run(ctx, updateService, updateReady)
+			})
+		}
 	}
 	return app.Run()
 }

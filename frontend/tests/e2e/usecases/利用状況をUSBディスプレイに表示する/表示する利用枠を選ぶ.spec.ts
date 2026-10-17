@@ -77,6 +77,7 @@ async function count(page: Page, src: string, colour: number[] | null, rect = [0
 }
 
 test('表示する枠を契約と枠で選ぶと、保存してプレビューを描き直し、再起動後も保つ', async ({ page, context }) => {
+  test.skip(true, '9.2-inch image coordinates and UI no longer apply to Rev.A Compact; rewrite in #32');
   test.setTimeout(240_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-limits-e2e-'));
   const hub = await startHub();

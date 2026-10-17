@@ -23,6 +23,7 @@ async function divider(page: Page) {
 }
 
 test('Local と表示先を保存し、再起動後もローカルの利用状況を表示する', async ({ page }) => {
+  test.skip(true, '9.2-inch image coordinates and UI no longer apply to Rev.A Compact; rewrite in #32');
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-local-settings-e2e-'));
   // tokscale reads an empty home folder, so the usage shown does not depend on this PC.

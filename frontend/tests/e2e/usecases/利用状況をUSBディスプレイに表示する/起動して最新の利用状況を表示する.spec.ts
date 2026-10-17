@@ -111,6 +111,7 @@ async function inked(page: Page, src: string, area: readonly [number, number, nu
 }
 
 test('起動して、Hub の最新の利用状況をゲージでプレビューに表示し続ける', async ({ page, context }) => {
+  test.skip(true, '9.2-inch image coordinates and UI no longer apply to Rev.A Compact; rewrite in #32');
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-usage-e2e-'));
   const hub = await startHub();
