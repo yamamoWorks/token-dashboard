@@ -161,7 +161,7 @@ func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage
 		if err != nil {
 			logger.Error("display_render_failed", "cause", err)
 		} else {
-			output(frame.JPEG)
+			output(frame.PNG)
 			s.mu.Lock()
 			s.preview = "data:image/png;base64," + base64.StdEncoding.EncodeToString(frame.PNG)
 			s.mu.Unlock()
