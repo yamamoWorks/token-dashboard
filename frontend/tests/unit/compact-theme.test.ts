@@ -59,7 +59,7 @@ describe('compact theme', () => {
     ['different circles', (a: Window, b: Window) => [
       { name: 'Gemini', windows: [a] }, { name: 'Claude', windows: [b] },
     ]],
-  ])('flattens two windows into one SVG when %s', (_description, groups) => {
+  ] as const)('flattens two windows into one SVG when %s', (_description, groups) => {
     const a = window('session', 'Session', 35);
     const b = window('weekly', 'Claude Weekly', 82, '7d');
     const document = render(data([panel('antigravity', groups(a, b))]));
