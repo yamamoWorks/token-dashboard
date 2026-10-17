@@ -32,11 +32,12 @@ test('追加した表示スタイルを1つアプリの定義から取り除く'
     await test.step('開始条件', async () => {
       await page.goto(`${server.url}/#/styles`);
       await expect(page.getByRole('heading', { name: 'Styles' })).toBeVisible();
-      await expect.poll(() => names(page)).toEqual(['Gauges', 'Bars', 'Dawn', 'Night']);
+      await expect.poll(() => names(page)).toEqual(['Gauges', 'Bars', 'Compact 3.5-inch', 'Dawn', 'Night']);
     });
     await test.step('手順1', async () => {
       await expect(page.getByRole('article', { name: 'Gauges' }).getByRole('button')).toHaveCount(0);
       await expect(page.getByRole('article', { name: 'Bars' }).getByRole('button')).toHaveCount(0);
+      await expect(page.getByRole('article', { name: 'Compact 3.5-inch' }).getByRole('button')).toHaveCount(0);
       await page.getByRole('button', { name: 'Delete Night' }).click();
       const dialog = page.getByRole('dialog', { name: 'Delete this style?' });
       await expect(dialog).toContainText('Night');
@@ -46,7 +47,7 @@ test('追加した表示スタイルを1つアプリの定義から取り除く'
     await test.step('受け入れ条件（取消）', async () => {
       await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
       await expect(page.getByRole('dialog')).toHaveCount(0);
-      await expect.poll(() => names(page)).toEqual(['Gauges', 'Bars', 'Dawn', 'Night']);
+      await expect.poll(() => names(page)).toEqual(['Gauges', 'Bars', 'Compact 3.5-inch', 'Dawn', 'Night']);
       expect(kept(dataDir)).toEqual(['dawn', 'night']);
       await page.getByRole('button', { name: 'Delete Night' }).click();
       await page.keyboard.press('Escape');
@@ -56,7 +57,7 @@ test('追加した表示スタイルを1つアプリの定義から取り除く'
     await test.step('手順2', async () => {
       await page.getByRole('button', { name: 'Delete Night' }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
-      await expect.poll(() => names(page)).toEqual(['Gauges', 'Bars', 'Dawn']);
+      await expect.poll(() => names(page)).toEqual(['Gauges', 'Bars', 'Compact 3.5-inch', 'Dawn']);
       expect(kept(dataDir)).toEqual(['dawn']);
       expect(existsSync(join(dataDir, 'styles', '.incoming')) ? readdirSync(join(dataDir, 'styles', '.incoming')) : []).toEqual([]);
     });
@@ -65,7 +66,7 @@ test('追加した表示スタイルを1つアプリの定義から取り除く'
       await server.stop();
       server = await startServer(dataDir, 34131);
       await page.goto(`${server.url}/#/styles`);
-      await expect.poll(() => names(page)).toEqual(['Gauges', 'Bars', 'Dawn']);
+      await expect.poll(() => names(page)).toEqual(['Gauges', 'Bars', 'Compact 3.5-inch', 'Dawn']);
       await expect(page.getByRole('article', { name: 'Gauges' }).getByText('In use', { exact: true })).toBeVisible();
     });
   } finally {
