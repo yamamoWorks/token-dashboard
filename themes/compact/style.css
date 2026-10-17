@@ -1,0 +1,240 @@
+:root {
+  --background: #0f1117;
+  --panel: #151821;
+  --divider: #2a2f3a;
+  --text: #e8eaf0;
+  --dim: #9da4b5;
+  --accent: #7cc4ff;
+  --normal: #7466e0;
+  --warning: #fab219;
+  --danger: #f0616d;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  width: 1920px;
+  height: 462px;
+  overflow: hidden;
+}
+body {
+  background: var(--background);
+  color: var(--text);
+  font-family: "Yu Gothic", "Segoe UI", sans-serif;
+}
+.compact-display {
+  width: 1920px;
+  height: 462px;
+  background: var(--background);
+}
+/* Only this top-left viewport contains content; the virtual canvas remains 1920x462. */
+.compact-screen {
+  position: relative;
+  width: 480px;
+  height: 320px;
+  overflow: hidden;
+  background: var(--background);
+}
+.token-strip {
+  position: absolute;
+  top: 5px;
+  left: 10px;
+  width: 460px;
+  height: 48px;
+  border-bottom: 1px solid var(--divider);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 0 2px 5px;
+}
+.token-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.token-label { color: var(--dim); font-size: 11px; line-height: 13px; }
+.token-count {
+  display: block;
+  width: 100%;
+  font-size: 25px;
+  line-height: 27px;
+  letter-spacing: -0.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.token-cost {
+  flex: none;
+  color: var(--accent);
+  font-size: 17px;
+  line-height: 28px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.provider-grid {
+  position: absolute;
+  top: 59px;
+  left: 8px;
+  width: 464px;
+  height: 253px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  align-content: start;
+  overflow: hidden;
+}
+.provider-card {
+  min-width: 0;
+  height: 253px;
+  border: 1px solid var(--divider);
+  border-radius: 11px;
+  background: var(--panel);
+  overflow: hidden;
+}
+/* A selected provider has exactly one card even if its circles were separate groups. */
+.provider-card:nth-child(n+3) { display: none; }
+.provider-heading {
+  height: 36px;
+  padding: 7px 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.provider-icon { width: 22px; height: 22px; flex: none; object-fit: contain; }
+.provider-name {
+  font-size: 17px;
+  line-height: 23px;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.provider-plan {
+  color: var(--dim);
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
+.meter-area {
+  position: relative;
+  height: 145px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.meter {
+  width: 144px;
+  height: 144px;
+  flex: none;
+  overflow: visible;
+}
+.ring-track, .ring-fill {
+  fill: none;
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+.ring-track { stroke: var(--divider); }
+.tone-normal { stroke: var(--normal); }
+.tone-warning { stroke: var(--warning); }
+.tone-danger { stroke: var(--danger); }
+/* Every g is a direct sibling, even when its window came from another circle.
+   Never use Handlebars @first within a nested circles loop for the ring radius. */
+.window-ring .ring-inner { display: none; }
+.window-ring:nth-of-type(2) .ring-inner { display: inline; }
+.window-ring:nth-of-type(n+2) .ring-outer { display: none; }
+.window-ring:nth-of-type(n+3) { display: none; }
+.meter-values {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 108px;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.meter-value {
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+  justify-content: center;
+  height: 23px;
+  width: 100%;
+  white-space: nowrap;
+}
+.meter-value:nth-child(n+3) { display: none; }
+.meter-value strong { font-size: 19px; line-height: 23px; }
+.meter-value span { color: var(--dim); font-size: 11px; }
+.window-details {
+  padding: 0 7px;
+  display: flex;
+  flex-direction: column;
+}
+.window-detail {
+  height: 33px;
+  min-width: 0;
+  border-top: 1px solid var(--divider);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 5px;
+}
+.window-detail:nth-child(n+3) { display: none; }
+.window-identity {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.duration-label {
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 700;
+  flex: none;
+}
+.original-label {
+  min-width: 0;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reset-time {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.clock {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 1.5;
+}
+.waiting, .empty-limits {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0;
+  padding: 16px;
+  color: var(--dim);
+  font-size: 22px;
+  text-align: center;
+}
+.empty-limits { top: 59px; bottom: 0; font-size: 19px; }

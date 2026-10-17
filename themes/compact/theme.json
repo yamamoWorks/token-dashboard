@@ -1,0 +1,9 @@
+{
+  "formatVersion": 1,
+  "id": "compact",
+  "name": "Compact 3.5-inch",
+  "width": 1920,
+  "height": 462,
+  "template": "template.hbs",
+  "stylesheet": "style.css"
+}
