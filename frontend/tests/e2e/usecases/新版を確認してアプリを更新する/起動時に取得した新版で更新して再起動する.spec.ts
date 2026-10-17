@@ -66,31 +66,52 @@ test('Rev.Aではビルド時の更新元指定があっても更新せずUIも�
   const dataDir = join(work, 'data');
   const env = { ...process.env, WAILS_DATA_DIR: dataDir };
   mkdirSync(source);
+  let pid = 0;
   try {
-    const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-    const rawKey = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('base64');
-    const current = join(work, installer('0.1.0'));
-    copyFileSync(build('0.1.0', source, rawKey), current);
-    publishRelease(source, build('0.2.0', source, rawKey), '0.2.0', privateKey);
-    saveSettings(dataDir);
-    expect(spawnSync(current, ['/S']).status).toBe(0);
-    expect(installedVersion()).toBe('0.1.0');
-    expect(runKey()).toBe(`"${installedExe}"`);
-
-    launch(installedExe, env);
-    const pid = (await waitFor('the app to start', () => appProcesses(installedExe)))[0];
-    launch(installedExe, env); // second instance opens the settings window
-
-    // Allow an incorrectly enabled startup updater time to stage the signed release.
-    await new Promise(resolve => setTimeout(resolve, 5_000));
-    const window = windowState(pid);
-    expect(window.title).toBe('Token Dashboard v0.1.0');
-    expect(window.names).not.toContain('Update and restart');
-    expect(window.text).not.toContain('Version 0.2.0 is ready to install.');
-    expect(installedVersion()).toBe('0.1.0');
-    const updates = join(dataDir, 'updates');
-    expect(existsSync(updates) ? readdirSync(updates) : []).toEqual([]);
-    expect(window.hubURL).toBe(hubURL);
+    await test.step('開始条件', async () => {
+      const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+      const rawKey = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('base64');
+      const current = join(work, installer('0.1.0'));
+      copyFileSync(build('0.1.0', source, rawKey), current);
+      publishRelease(source, build('0.2.0', source, rawKey), '0.2.0', privateKey);
+      saveSettings(dataDir);
+      expect(spawnSync(current, ['/S']).status).toBe(0);
+      expect(installedVersion()).toBe('0.1.0');
+      expect(runKey()).toBe(`"${installedExe}"`);
+      launch(installedExe, env);
+      pid = (await waitFor('the app to start', () => appProcesses(installedExe)))[0];
+    });
+    await test.step('手順1', async () => {
+      launch(installedExe, env); // second instance opens the settings window
+      await waitFor('the settings window', () => windowState(pid).title.includes('Token Dashboard'));
+    });
+    await test.step('手順2', async () => {
+      // A wrongly enabled updater would stage the signed release at startup.
+      await new Promise(resolve => setTimeout(resolve, 5_000));
+      expect(windowState(pid).title).toBe('Token Dashboard v0.1.0');
+    });
+    await test.step('手順3', async () => {
+      const window = windowState(pid);
+      expect(window.names).not.toContain('Update and restart');
+      expect(window.text).not.toContain('Version 0.2.0 is ready to install.');
+    });
+    await test.step('手順4', async () => {
+      expect(installedVersion()).toBe('0.1.0');
+      const updates = join(dataDir, 'updates');
+      expect(existsSync(updates) ? readdirSync(updates) : []).toEqual([]);
+    });
+    await test.step('手順5', async () => {
+      expect(windowState(pid).hubURL).toBe(hubURL);
+    });
+    await test.step('手順6', async () => {
+      launch(installedExe, env);
+      expect(windowState(pid).names).not.toContain('Update and restart');
+    });
+    await test.step('受け入れ条件', async () => {
+      expect(installedVersion()).toBe('0.1.0');
+      const updates = join(dataDir, 'updates');
+      expect(existsSync(updates) ? readdirSync(updates) : []).toEqual([]);
+    });
   } finally {
     uninstall();
     rmSync(work, { recursive: true, force: true });
