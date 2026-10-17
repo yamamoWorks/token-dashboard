@@ -41,8 +41,8 @@ var webAssets embed.FS
 var configJSON []byte
 
 // Fixed at build time through -ldflags -X (see scripts/build.mjs): the release CI sets
-// the version from the tag, and the desktop E2E also sets a local update source.
-// An empty value keeps the one in build/app.json.
+// the version from the tag. Rev.A intentionally ignores all update-source
+// overrides until it has its own trusted release channel.
 var buildVersion, buildUpdateSource, buildUpdatePublicKey string
 
 type appConfig struct {
@@ -52,6 +52,12 @@ type appConfig struct {
 	Version         string `json:"version"`
 	UpdateSource    string `json:"updateSource"`
 	UpdatePublicKey string `json:"updatePublicKey"`
+}
+
+// disableUpdates prevents an upstream (or build-time overridden) updater from
+// replacing a fork-built Rev.A binary. A trusted fork release channel is TBD.
+func disableUpdates(cfg *appConfig) {
+	cfg.UpdateSource, cfg.UpdatePublicKey = "", ""
 }
 
 func main() {
@@ -71,9 +77,8 @@ func run() error {
 			*target = value
 		}
 	}
-	// Never use the fork upstream updater, even when build-time -X flags override app.json.
-	// Rev.A releases will have their own trusted update channel in a later issue.
-	cfg.UpdateSource, cfg.UpdatePublicKey = "", ""
+	// Ignore embedded and linker-supplied upstream updater settings for Rev.A.
+	disableUpdates(&cfg)
 	if cfg.ID == "" || cfg.Name == "" {
 		return fmt.Errorf("build/app.json: id and name are required")
 	}
