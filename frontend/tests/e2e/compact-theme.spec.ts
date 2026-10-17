@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import Handlebars from 'handlebars';
 import { expect, test } from '@playwright/test';
 
-const root = join(import.meta.dirname, '../../../../themes/compact');
+const root = join(import.meta.dirname, '../../../themes/compact');
 const template = Handlebars.compile(readFileSync(join(root, 'template.hbs'), 'utf8'), { strict: true });
 const css = readFileSync(join(root, 'style.css'), 'utf8');
 
