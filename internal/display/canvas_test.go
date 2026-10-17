@@ -207,7 +207,7 @@ func TestDisplayRunRecoversAfterCanvasTimeout(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("recovered frame did not update the preview")
 			}
-			if !bytes.Equal(<-output, frame.JPEG) || s.Preview() != "data:image/png;base64,"+base64.StdEncoding.EncodeToString(frame.PNG) {
+			if !bytes.Equal(<-output, frame.PNG) || s.Preview() != "data:image/png;base64,"+base64.StdEncoding.EncodeToString(frame.PNG) {
 				t.Fatal("recovered frame did not publish the matching PNG and JPEG")
 			}
 		})
