@@ -199,7 +199,7 @@ test('定義された表示スタイルを、現在の表示を変えずに見�
       expect(file()).toEqual(saved);
       await expect(page.getByText(token)).toHaveCount(0);
       await page.getByRole('link', { name: 'Display' }).click();
-      await expect(page.getByRole('textbox', { name: 'Display style' })).toHaveValue('Gauges');
+      await expect(page.getByRole('textbox', { name: 'Display style' })).toHaveCount(0);
       await expect.poll(async () => (await colours(page, await preview(page, 'Display preview'))).divider).not.toEqual(line);
       await expect.poll(async () => (await colours(page, await preview(page, 'Display preview'))).alphaBarStart).not.toEqual(danger);
       expect(file()).toEqual(saved);

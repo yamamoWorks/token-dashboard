@@ -4,8 +4,8 @@ import { Card, Group, Image, Text, Title } from '@mantine/core';
 import { getPreview, previewKey, subscribePreview } from '../../features/display/queries';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 
-// Shows the image the app sends to the TURZX. The window never draws it. The control sits right of
-// the title and the children go above the image.
+// The PNG is a 1920×462 virtual canvas. Rev.A shows its top-left 480×320 pixels.
+// Keep the image unmodified: scale the entire canvas with its crop window (4:1).
 export function UsagePreview({ title, control, children }: { title: string; control?: ReactNode; children?: ReactNode }) {
   const client = useQueryClient();
   const preview = useQuery(getPreview());
@@ -15,7 +15,13 @@ export function UsagePreview({ title, control, children }: { title: string; cont
     {children}
     <ErrorNotice error={preview.error} />
     {preview.data
-      ? <Image src={preview.data} alt="Display preview" radius="sm" style={{ aspectRatio: '1920 / 462' }} />
+      ? <div data-testid="compact-preview" style={{
+          width: '100%', maxWidth: 480, aspectRatio: '480 / 320',
+          overflow: 'hidden', borderRadius: 'var(--mantine-radius-sm)',
+        }}>
+          <Image src={preview.data} alt="Display preview"
+            style={{ display: 'block', width: '400%', maxWidth: 'none', height: 'auto' }} />
+        </div>
       : !preview.error && <Text size="sm" c="dimmed">No image yet.</Text>}
   </Card>;
 }
