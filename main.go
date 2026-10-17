@@ -20,6 +20,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 
 	"token-monitor-turzx/internal/appstate"
+	"token-monitor-turzx/internal/compact"
 	"token-monitor-turzx/internal/desktop"
 	"token-monitor-turzx/internal/diagnostics"
 	"token-monitor-turzx/internal/display"
@@ -126,10 +127,8 @@ func run() error {
 	}
 	updateService := updates.New(updateConfig, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
 	usageState := usage.NewState()
-	displayService := &display.Service{State: usageState, Logger: logger, Cycle: func() (bool, time.Duration) {
-		on, seconds := settings.CycleSetting(settingsService)
-		return on, cycleEvery(seconds)
-	},
+	compactState := usage.NewState()
+	displayService := &display.Service{State: usageState, Logger: logger, Cycle: func() (bool, time.Duration) { return false, compact.PageInterval },
 		Hidden:     func() ([]string, error) { return settings.HiddenLimits(settingsService) },
 		Show:       func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) },
 		ShiftEvery: shiftInterval()}
@@ -174,6 +173,11 @@ func run() error {
 		sink = output.Submit
 	}
 	settingsService.OnDisplaySaved = usageState.Touch
+	go (&compact.Mirror{
+		All: usageState, Compact: compactState,
+		Hidden: func() ([]string, error) { return settings.HiddenLimits(settingsService) },
+		Logger: logger,
+	}).Run(ctx)
 	// The server build is for tests, which cannot press keys, so it never counts idle time as away.
 	conditions := presence.New(func(away bool) { display.SetAway(displayService, away) })
 	idleAfter := func() int { return settings.AwayMinutesSetting(settingsService) * 60 }
@@ -181,7 +185,7 @@ func run() error {
 		idleAfter = func() int { return math.MaxInt32 }
 	}
 	go presence.Watch(ctx, conditions, idleAfter)
-	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
+	go display.Run(ctx, displayService, renderer, compactState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
 		select {
