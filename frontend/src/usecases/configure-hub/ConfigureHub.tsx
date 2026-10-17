@@ -59,7 +59,7 @@ export function EditSettings() {
   useEffect(() => { if (minutes !== undefined) setAwayText(minutes); }, [minutes]);
   if (!draft) return null;
   const commitAway = (raw: string) => {
-    const value = /\\d/.test(raw) ? Number(raw.replace(/\\D/g, '')) : NaN;
+    const value = /\d/.test(raw) ? Number(raw.replace(/\D/g, '')) : NaN;
     if (value >= 1 && value <= 240 && value !== draft.awayMinutes) draft.setAwayMinutes(value);
     else setAwayText(draft.awayMinutes);
   };
