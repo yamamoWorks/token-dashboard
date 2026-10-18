@@ -4,10 +4,11 @@ import react from '@vitejs/plugin-react';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import wails from '@wailsio/runtime/plugins/vite';
 import { themeTemplatesPlugin } from './build/theme-build';
+import { compactModulePlugin } from './src/compact/CompactModulePlugin';
 
 export default defineConfig(({ mode }) => {
   return {
-    plugins: [themeTemplatesPlugin(fileURLToPath(new URL('../themes', import.meta.url))), { name: 'app-csp', transformIndexHtml: (html: string) => html.replace('__SCRIPT_SRC__', mode === 'production' ? "'self' 'unsafe-eval'" : "'self' 'unsafe-inline' 'unsafe-eval'").replace('__CONNECT_SRC__', mode === 'production' ? "'self'" : "'self' ws://127.0.0.1:* http://127.0.0.1:*") }, tanstackRouter({ target: 'react', autoCodeSplitting: false }), react(), wails('./bindings')],
+    plugins: [themeTemplatesPlugin(fileURLToPath(new URL('../themes', import.meta.url))), compactModulePlugin(), { name: 'app-csp', transformIndexHtml: (html: string) => html.replace('__SCRIPT_SRC__', mode === 'production' ? "'self' 'unsafe-eval'" : "'self' 'unsafe-inline' 'unsafe-eval'").replace('__CONNECT_SRC__', mode === 'production' ? "'self'" : "'self' ws://127.0.0.1:* http://127.0.0.1:*") }, tanstackRouter({ target: 'react', autoCodeSplitting: false }), react(), wails('./bindings')],
     resolve: { alias: [
       { find: '@bindings', replacement: fileURLToPath(new URL('./bindings', import.meta.url)) },
     ] },
