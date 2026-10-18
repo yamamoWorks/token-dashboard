@@ -10,7 +10,6 @@ import { ErrorNotice } from '../../shared/ErrorNotice';
 const builtins = [
   { id: 'gauges', name: 'Gauges', builtin: true },
   { id: 'bars', name: 'Bars', builtin: true },
-  { id: 'compact', name: 'Compact 3.5-inch', builtin: true },
 ];
 const builtinIds = new Set(builtins.map(style => style.id));
 
