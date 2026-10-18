@@ -47,7 +47,7 @@ func TestRunSendsBlackWhileAway(t *testing.T) {
 			return nil
 		}
 	}
-	if !bytes.Equal(next(), frame.PNG) {
+	if !bytes.Equal(next(), frame.JPEG) {
 		t.Fatal("the first image was not the drawn one")
 	}
 	SetAway(s, true)
@@ -61,7 +61,7 @@ func TestRunSendsBlackWhileAway(t *testing.T) {
 	}
 	SetAway(s, false)
 	for i := 0; i < 20; i++ {
-		if bytes.Equal(next(), frame.PNG) {
+		if bytes.Equal(next(), frame.JPEG) {
 			return
 		}
 	}

@@ -179,7 +179,7 @@ func TestDisplayRunRecoversAfterCanvasTimeout(t *testing.T) {
 			updated := make(chan struct{}, 1)
 			done := make(chan struct{})
 			go func() {
-				Run(ctx, s, r, state, redraw, func() Style { return Gauges }, func(png []byte) { output <- png }, func(string, any) { updated <- struct{}{} }, s.Logger)
+				Run(ctx, s, r, state, redraw, func() Style { return Gauges }, func(jpeg []byte) { output <- jpeg }, func(string, any) { updated <- struct{}{} }, s.Logger)
 				close(done)
 			}()
 			t.Cleanup(func() {
@@ -207,8 +207,8 @@ func TestDisplayRunRecoversAfterCanvasTimeout(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("recovered frame did not update the preview")
 			}
-			if !bytes.Equal(<-output, frame.PNG) || s.Preview() != "data:image/png;base64,"+base64.StdEncoding.EncodeToString(frame.PNG) {
-				t.Fatal("recovered frame did not publish the matching PNG to output and preview")
+			if !bytes.Equal(<-output, frame.JPEG) || s.Preview() != "data:image/png;base64,"+base64.StdEncoding.EncodeToString(frame.PNG) {
+				t.Fatal("recovered frame did not publish the matching PNG and JPEG")
 			}
 		})
 	}
