@@ -118,14 +118,18 @@ func run() error {
 	state := &appstate.State{}
 	var app *application.App
 	var window *application.WebviewWindow
+	var bridge *compact.Bridge
 	emit := func(name string, data any) {
+		if name == display.Updated {
+			bridge.OnUpdated()
+		}
 		if app != nil {
 			app.Event.Emit(name, data)
 		}
 	}
 	controls := &desktop.Controls{Emit: emit}
 	settingsService := settings.New(filepath.Join(dir, "settings.json"), cfg.ID, compact.ListDevices, logger)
-	info := desktop.Info{Name: cfg.Name, Version: cfg.Version, AppID: cfg.ID, Server: serverMode, UpdateConfigured: cfg.UpdateSource != "" && cfg.UpdatePublicKey != "", DiagnosticsAvailable: diagnosticsAvailable}
+	info := desktop.Info{Name: cfg.Name, Version: cfg.Version, AppID: cfg.ID, Server: serverMode, UpdateConfigured: false, DiagnosticsAvailable: diagnosticsAvailable}
 	appService := desktop.New(info, state, controls, logger)
 	styleService := styles.New(filepath.Join(dir, "styles"), logger)
 	updateConfig := updates.Config{
@@ -146,6 +150,9 @@ func run() error {
 	output := compact.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
+	if !serverMode {
+		bridge = compact.NewBridge(ctx, displayService.Preview, output.Submit, logger)
+	}
 	options := application.Options{
 		Name: cfg.Name, Description: "利用状況を TURZX に表示する常駐アプリ", Logger: logger,
 		Assets:       application.AssetOptions{Handler: application.BundledAssetFileServer(root), DisableLogging: true},
@@ -177,10 +184,8 @@ func run() error {
 		}}
 	}
 	app = application.New(options)
-	sink := func([]byte) {}
 	if !serverMode {
 		go output.Run(ctx)
-		sink = output.Submit
 	}
 	settingsService.OnDisplaySaved = usageState.Touch
 	// The server build is for tests, which cannot press keys, so it never counts idle time as away.
@@ -192,7 +197,7 @@ func run() error {
 	go presence.Watch(ctx, conditions, idleAfter)
 	mirror := &compact.Mirror{All: usageState, Compact: compactState, Hidden: displayService.Hidden, Logger: logger}
 	go mirror.Run(ctx)
-	go display.Run(ctx, displayService, renderer, compactState, redrawInterval(), func() display.Style { return display.Style("Compact") }, sink, emit, logger)
+	go display.Run(ctx, displayService, renderer, compactState, redrawInterval(), func() display.Style { return display.Style("Compact") }, bridge.OnOutput, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
 		select {
