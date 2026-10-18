@@ -50,12 +50,11 @@ function definedStyles() {
     seen.add(id);
     manifests.push({ id, name });
   }
-  const extras = manifests.filter(style => style.id !== 'gauges' && style.id !== 'bars' && style.id !== 'compact')
+  const extras = manifests.filter(style => style.id !== 'gauges' && style.id !== 'bars')
     .sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   return [
     { name: 'Gauges', builtin: true },
     { name: 'Bars', builtin: true },
-    { name: 'Compact 3.5-inch', builtin: true },
     ...extras.map(style => ({ name: style.name, builtin: false })),
   ];
 }
@@ -126,8 +125,8 @@ test('定義された表示スタイルを、現在の表示を変えずに見�
       await expect(page.getByRole('heading', { name: 'Styles' })).toBeVisible();
       const heading = await page.getByRole('heading', { name: 'Styles' }).boundingBox();
       expect(heading!.height).toBeGreaterThan(20);
-      await expect.poll(() => cards(page)).toEqual(['Gauges Built-in In use', 'Bars Built-in', 'Compact 3.5-inch Built-in']);
-      for (const name of ['Gauges', 'Bars', 'Compact 3.5-inch']) {
+      await expect.poll(() => cards(page)).toEqual(['Gauges Built-in In use', 'Bars Built-in']);
+      for (const name of ['Gauges', 'Bars']) {
         const image = page.getByRole('article', { name }).getByRole('img', { name: `${name} preview` });
         await expect.poll(() => image.evaluate(img => {
           const element = img as HTMLImageElement;
@@ -148,7 +147,7 @@ test('定義された表示スタイルを、現在の表示を変えずに見�
       }, { timeout: 30_000 }).toEqual([[1920, 462], line, danger, line]);
       await expect(page.getByRole('alert')).toHaveCount(0);
     });
-    const labels = ['Gauges Built-in In use', 'Bars Built-in', 'Compact 3.5-inch Built-in'];
+    const labels = ['Gauges Built-in In use', 'Bars Built-in'];
     await test.step('手順2', async () => {
       const gaugesBefore = await preview(page, 'Gauges preview');
       const barsBefore = await preview(page, 'Bars preview');
@@ -170,7 +169,6 @@ test('定義された表示スタイルを、現在の表示を変えずに見�
       await expect.poll(() => cards(page)).toEqual(expected);
       await expect(page.getByRole('article', { name: 'Gauges' }).getByText('Built-in', { exact: true })).toBeVisible();
       await expect(page.getByRole('article', { name: 'Bars' }).getByText('Built-in', { exact: true })).toBeVisible();
-      await expect(page.getByRole('article', { name: 'Compact 3.5-inch' }).getByText('Built-in', { exact: true })).toBeVisible();
     });
     await test.step('受け入れ条件', async () => {
       const defined = definedStyles();
@@ -199,7 +197,7 @@ test('定義された表示スタイルを、現在の表示を変えずに見�
       expect(file()).toEqual(saved);
       await expect(page.getByText(token)).toHaveCount(0);
       await page.getByRole('link', { name: 'Display' }).click();
-      await expect(page.getByRole('textbox', { name: 'Display style' })).toHaveCount(0);
+      await expect(page.getByRole('textbox', { name: 'Display style' })).toHaveValue('Gauges');
       await expect.poll(async () => (await colours(page, await preview(page, 'Display preview'))).divider).not.toEqual(line);
       await expect.poll(async () => (await colours(page, await preview(page, 'Display preview'))).alphaBarStart).not.toEqual(danger);
       expect(file()).toEqual(saved);

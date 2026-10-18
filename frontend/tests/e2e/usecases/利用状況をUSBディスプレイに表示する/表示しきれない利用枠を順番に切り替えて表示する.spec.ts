@@ -49,7 +49,6 @@ async function colourAt(page: Page, [x, y]: number[]) {
 const shown = (page: Page) => colourAt(page, firstBar);
 
 test('Cycle を入れると、表示しきれない契約をページとして Cycle time ごとに順番に表示する', async ({ page, context }) => {
-  test.skip(true, '9.2-inch image coordinates and UI no longer apply to Rev.A Compact; rewrite in #32');
   let view: Page = page;
   test.setTimeout(240_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-cycle-e2e-'));

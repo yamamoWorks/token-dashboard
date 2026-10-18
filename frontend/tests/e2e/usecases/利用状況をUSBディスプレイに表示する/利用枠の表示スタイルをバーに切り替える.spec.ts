@@ -153,7 +153,6 @@ async function rotationError(page: Page, png: string, jpeg: string) {
 }
 
 test('実描画のJPEGがPNGと時計回り90度で対応し、描画要求の取得失敗後も更新を再開する', async ({ page }) => {
-  test.skip(true, '9.2-inch image coordinates and UI no longer apply to Rev.A Compact; rewrite in #32');
   test.setTimeout(90_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-canvas-e2e-'));
   const hub = await startHub();
@@ -231,7 +230,6 @@ test('実描画のJPEGがPNGと時計回り90度で対応し、描画要求の�
 });
 
 test('Display style を Bars に切り替えると、保存して Tokens の列と横棒の利用枠で描き直す', async ({ page, context }) => {
-  test.skip(true, '9.2-inch image coordinates and UI no longer apply to Rev.A Compact; rewrite in #32');
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-bars-e2e-'));
   const hub = await startHub();

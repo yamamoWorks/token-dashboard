@@ -4,11 +4,12 @@ import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { appProcesses, launch, powershell, waitFor, windowState } from '../../support/desktop';
+import { appProcesses, launch, powershell, pressButton, waitFor, windowState } from '../../support/desktop';
 
 // Installs the real desktop build, so it runs only through `node scripts/run.mjs test:desktop`.
-// Rev.A must not auto-update from the original fork, even when linker flags
-// supply a signed local update feed. The test installs real desktop builds.
+// The task tray cannot be driven by UI Automation: starting the app again stands in for
+// clicking the tray icon (the running instance shows its window), and the tray menu item
+// is not checked here. The update source is a local folder fixed into both builds.
 const root = resolve(import.meta.dirname, '../../../../..');
 const appID = 'io.github.nuitsjp.token-monitor-turzx';
 const installDir = join(process.env.LOCALAPPDATA ?? '', 'Programs', appID);
@@ -56,17 +57,17 @@ function uninstall() {
   rmSync(installDir, { recursive: true, force: true });
 }
 
-test('Rev.Aではビルド時の更新元指定があっても更新せずUIも表示しない @desktop', async () => {
+test('起動時に取得した新版で、確認後に更新して再起動する @desktop', async () => {
   test.skip(process.env.DESKTOP_E2E !== '1', 'installs the desktop app; run node scripts/run.mjs test:desktop');
   test.setTimeout(15 * 60_000);
   expect(powershell('@(Get-Process token-monitor-turzx -ErrorAction SilentlyContinue).Count'), 'stop every running Token Dashboard first').toBe('0');
   expect(existsSync(installedExe), 'uninstall Token Dashboard first').toBe(false);
-  const work = mkdtempSync(join(tmpdir(), 'turzx-update-disabled-e2e-'));
+  const work = mkdtempSync(join(tmpdir(), 'turzx-update-e2e-'));
   const source = join(work, 'release');
   const dataDir = join(work, 'data');
   const env = { ...process.env, WAILS_DATA_DIR: dataDir };
   mkdirSync(source);
-  let pid = 0;
+  let oldPid = 0;
   try {
     await test.step('開始条件', async () => {
       const { publicKey, privateKey } = generateKeyPairSync('ed25519');
@@ -79,36 +80,50 @@ test('Rev.Aではビルド時の更新元指定があっても更新せずUIも�
       expect(installedVersion()).toBe('0.1.0');
       expect(runKey()).toBe(`"${installedExe}"`);
       launch(installedExe, env);
-      pid = (await waitFor('the app to start', () => appProcesses(installedExe)))[0];
+      oldPid = (await waitFor('the app to start', () => appProcesses(installedExe)))[0];
+      launch(installedExe, env); // shows the window before the check finishes
     });
     await test.step('手順1', async () => {
-      launch(installedExe, env); // second instance opens the settings window
-      await waitFor('the settings window', () => windowState(pid).title.includes('Token Dashboard'));
+      const expected = createHash('sha256').update(readFileSync(join(source, installer('0.2.0')))).digest('hex');
+      const staged = await waitFor('the staged installer', () => {
+        const updates = join(dataDir, 'updates');
+        const dirs = existsSync(updates) ? readdirSync(updates) : [];
+        const file = dirs.map(dir => join(updates, dir, installer('0.2.0'))).find(existsSync);
+        return file && createHash('sha256').update(readFileSync(file)).digest('hex') === expected && file;
+      });
+      expect(staged).toContain(join(dataDir, 'updates'));
     });
     await test.step('手順2', async () => {
-      // A wrongly enabled updater would stage the signed release at startup.
-      await new Promise(resolve => setTimeout(resolve, 5_000));
-      expect(windowState(pid).title).toBe('Token Dashboard v0.1.0');
+      // The window opened at startup shows the section without being reopened.
+      await waitFor('the update section', () => windowState(oldPid).text.includes('Version 0.2.0 is ready to install.'));
     });
     await test.step('手順3', async () => {
-      const window = windowState(pid);
-      expect(window.names).not.toContain('Update and restart');
-      expect(window.text).not.toContain('Version 0.2.0 is ready to install.');
+      launch(installedExe, env);
+      const window = windowState(oldPid);
+      expect(window.title).toBe('Token Dashboard v0.1.0');
+      expect(window.text).toContain('Version 0.2.0 is ready to install.');
+      expect(window.names).toContain('Update and restart');
+      expect(window.names.indexOf('Update and restart')).toBeLessThan(window.names.indexOf('Style'));
     });
     await test.step('手順4', async () => {
-      expect(installedVersion()).toBe('0.1.0');
-      const updates = join(dataDir, 'updates');
-      expect(existsSync(updates) ? readdirSync(updates) : []).toEqual([]);
+      pressButton(oldPid, 'Update and restart');
+      await waitFor('the old version to exit', () => !appProcesses(installedExe).includes(oldPid));
     });
     await test.step('手順5', async () => {
-      expect(windowState(pid).hubURL).toBe(hubURL);
+      await waitFor('the new version to start', () => appProcesses(installedExe).length > 0);
+      expect(installedVersion()).toBe('0.2.0');
+      expect(runKey()).toBe(`"${installedExe}"`);
     });
     await test.step('手順6', async () => {
       launch(installedExe, env);
-      expect(windowState(pid).names).not.toContain('Update and restart');
+      const window = windowState(appProcesses(installedExe)[0]);
+      expect(window.title).toBe('Token Dashboard v0.2.0');
+      expect(window.names).toContain('Style');
+      expect(window.names).not.toContain('Update and restart');
     });
     await test.step('受け入れ条件', async () => {
-      expect(installedVersion()).toBe('0.1.0');
+      // The update kept the saved connection, and the same version is not staged again.
+      expect(windowState(appProcesses(installedExe)[0]).hubURL).toBe(hubURL);
       const updates = join(dataDir, 'updates');
       expect(existsSync(updates) ? readdirSync(updates) : []).toEqual([]);
     });

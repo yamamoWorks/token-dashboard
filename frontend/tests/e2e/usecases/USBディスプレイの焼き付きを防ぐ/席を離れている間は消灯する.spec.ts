@@ -106,9 +106,6 @@ test('離席条件が成立している間は TURZX を消灯し、すべて解�
       await drawing();
       signal(server.pid, 'lock');
       await page.waitForTimeout(1_500);
-      // An already completed frame may still be propagating into the preview.
-      // First establish a quiet interval before checking that it remains unchanged.
-      await stays();
       const shown = await preview();
       await stays();
       expect(await preview()).toBe(shown);
@@ -119,12 +116,7 @@ test('離席条件が成立している間は TURZX を消灯し、すべて解�
       signal(server.pid, 'unlock');
       await expect.poll(() => frames.length, { timeout: 15_000 }).toBeGreaterThan(2);
       expect((await measure(page, frames.slice(0, 1)))[0].shift).toEqual([0, 0]);
-      // The renderer may complete another shift while navigating to Display.
-      // Match a frame transferred after unlock rather than racing the newest frame.
-      await expect.poll(async () => {
-        const shown = await preview();
-        return frames.some(frame => shown === `data:image/png;base64,${frame.png}`);
-      }, { timeout: 15_000 }).toBe(true);
+      expect(await preview()).toBe(`data:image/png;base64,${frames[frames.length - 1].png}`);
     });
     await test.step('手順5', async () => {
       // A display plugged in while away is switched off by the black image that the beat and a new usage

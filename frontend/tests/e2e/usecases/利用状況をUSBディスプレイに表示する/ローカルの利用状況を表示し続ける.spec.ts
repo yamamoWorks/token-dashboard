@@ -60,7 +60,6 @@ function message(at: Date, input: number, output = 0, cacheRead = 0, cacheWrite 
 }
 
 test('ローカルの利用記録の変化に合わせて表示を更新し、取得元を変えると取得を止める', async ({ page }) => {
-  test.skip(true, '9.2-inch image coordinates and UI no longer apply to Rev.A Compact; rewrite in #32');
   test.setTimeout(120_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-local-usage-e2e-'));
   const { home, env } = localHome();
