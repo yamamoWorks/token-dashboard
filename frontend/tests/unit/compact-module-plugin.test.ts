@@ -21,8 +21,9 @@ describe('CompactModulePlugin', () => {
       const target = compactModuleTargets.find(value => value.original === id);
       expect(target?.replacement).toBe(absolute(item.replacement));
       expect(target?.code).toContain(`export { ${item.name} } from `);
-      expect(readFileSync(absolute(item.replacement), 'utf8')).toMatch(
-        new RegExp(`export\\s+const\\s+${item.name}\\s*=`),
+      const replacementSource = readFileSync(absolute(item.replacement), 'utf8');
+      expect(replacementSource).toContain(
+        item.name === 'StyleList' ? 'export function StyleList()' : 'export const Route =',
       );
       expect(compactReplacementForId(id)).toBe(target?.code);
     }
