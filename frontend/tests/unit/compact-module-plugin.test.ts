@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   compactModulePlugin, compactModuleTargets, compactReplacementForId, missingCompactModules,
@@ -11,7 +11,7 @@ const modules = [
   { original: 'usecases/browse-styles/StyleList.tsx', replacement: 'compact/CompactStyleList.tsx', name: 'StyleList' },
 ] as const;
 
-const absolute = (path: string) => fileURLToPath(new URL(`../../src/${path}`, import.meta.url)).replaceAll('\\', '/');
+const absolute = (path: string) => resolve(import.meta.dirname, '../../src', path).replaceAll('\\', '/');
 
 describe('CompactModulePlugin', () => {
   it('maps exactly the original three modules to separately exported Compact modules', () => {
