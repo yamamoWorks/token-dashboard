@@ -2,9 +2,9 @@ name: Compact Rev.A checks
 on:
   workflow_dispatch:
   push:
-    branches: [rebuild/compact-reva, main]
+    branches: [main]
   pull_request:
-    branches: [rebuild/compact-reva, main]
+    branches: [main]
 permissions:
   contents: read
 jobs:
