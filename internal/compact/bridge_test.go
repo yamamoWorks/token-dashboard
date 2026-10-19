@@ -110,10 +110,20 @@ func TestBridgeDisplayRunAwayHeartbeatAndFirstReturnPNG(t *testing.T) {
 	s := &display.Service{State: state, Logger: bridgeLogger(), Hidden: func() ([]string, error) { return nil, nil }}
 	frames := make(chan []byte, 32)
 	requests := make(chan struct{}, 1)
+	initialPNGReleased := make(chan struct{})
 	b := NewBridge(ctx, s.Preview, func(data []byte) {
 		select {
 		case frames <- bytes.Clone(data):
 		case <-ctx.Done():
+		}
+		if bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")) {
+			// Keep the initial Updated callback in flight until the test actor has
+			// set away. Otherwise the 100ms beat can start a second Canvas request
+			// before that actor runs, and the fake renderer never completes it.
+			select {
+			case <-initialPNGReleased:
+			case <-ctx.Done():
+			}
 		}
 	}, bridgeLogger())
 	emit := func(name string, _ any) {
@@ -160,7 +170,10 @@ func TestBridgeDisplayRunAwayHeartbeatAndFirstReturnPNG(t *testing.T) {
 	if !bytes.Equal(next(), red) {
 		t.Fatal("initial output was not the published PNG")
 	}
+	// Model a caller that is scheduled after the next redraw beat under CI load.
+	time.Sleep(200 * time.Millisecond)
 	display.SetAway(s, true)
+	close(initialPNGReleased)
 	for i := 0; i < 3; i++ {
 		data := next()
 		_, format, err := image.DecodeConfig(bytes.NewReader(data))
