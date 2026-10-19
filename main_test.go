@@ -1,6 +1,45 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"testing"
+
+	"token-monitor-turzx/internal/appstate"
+	"token-monitor-turzx/internal/updates"
+)
+
+// Use the real embedded metadata, including the restored upstream release URL.
+// CI also runs this test with nonempty linker overrides to protect that build path.
+func TestCompactUpdaterWithEmbeddedMetadataAndLinkerOverrides(t *testing.T) {
+	var cfg appConfig
+	if err := json.Unmarshal(configJSON, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if buildUpdateSource != "" {
+		cfg.UpdateSource = buildUpdateSource
+	}
+	if buildUpdatePublicKey != "" {
+		cfg.UpdatePublicKey = buildUpdatePublicKey
+	}
+	disableUpdates(&cfg)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	u := updates.New(updates.Config{
+		AppID: cfg.ID, Version: cfg.Version, Source: cfg.UpdateSource,
+		PublicKey: cfg.UpdatePublicKey, Enabled: false, CacheDir: t.TempDir(),
+	}, &appstate.State{}, logger, func(string, any) {}, func(string) error {
+		t.Fatal("Compact must never launch an installer")
+		return nil
+	}, func() { t.Fatal("Compact must never approve an updater restart") })
+	if u.GetStatus().Configured {
+		t.Fatal("restored metadata or linker values configured the Compact updater")
+	}
+	if _, err := u.Check(context.Background()); err == nil {
+		t.Fatal("Compact updater accepted a manual update check")
+	}
+}
 
 func TestDisableUpdatesRegardlessOfEmbeddedOrBuildSource(t *testing.T) {
 	for _, tc := range []struct {
