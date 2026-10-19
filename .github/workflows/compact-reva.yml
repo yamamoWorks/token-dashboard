@@ -1,0 +1,55 @@
+name: Compact Rev.A checks
+on:
+  workflow_dispatch:
+  push:
+    branches: [rebuild/compact-reva]
+  pull_request:
+    branches: [rebuild/compact-reva, main]
+permissions:
+  contents: read
+jobs:
+  compact:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve upstream tests and build entry points
+        shell: pwsh
+        run: |
+          git fetch https://github.com/nuitsjp/token-dashboard.git 15c8447272a3faf16749e6d07f14c9f4d6a60b30
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --exit-code FETCH_HEAD -- frontend/tests/e2e frontend/playwright.config.ts Taskfile.yml build/app.json scripts/run.mjs scripts/build.mjs .github/workflows/windows.yml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $upstreamTests = @(git ls-tree -r --name-only FETCH_HEAD | Where-Object { $_ -match '_test\.go$' })
+          git diff --exit-code FETCH_HEAD -- @upstreamTests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Dependencies and generated sources
+        run: node scripts/run.mjs setup
+      - name: Chromium
+        working-directory: frontend
+        run: npx playwright install --only-shell chromium
+      - name: NSIS
+        run: choco install nsis --yes --no-progress
+      - name: Compact Go, frontend, E2E, desktop and installer
+        run: node scripts/compact-verify.mjs ci
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compact-reva-results
+          path: |
+            frontend/test-results/compact/
+            frontend/playwright-report/compact/
+            bin/*-setup.exe
+          if-no-files-found: warn
+          retention-days: 7
