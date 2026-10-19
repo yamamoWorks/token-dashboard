@@ -83,14 +83,6 @@
 <a id="execution"></a>
 ## 5. 実行・切り替え・検証手順
 
-### Compact Rev.A 専用検証
-
-`rebuild/compact-reva` の検証は Windows で `node scripts/run.mjs setup` と `npm --prefix frontend exec -- playwright install --only-shell chromium` の実行後、`node scripts/compact-verify.mjs verify` で行います。Go root/internal/release、vet、文書検査、TS lint・Vitest・型検査、Compact構成のサーバービルドと専用E2Eを実行します。NSISを導入した環境の `node scripts/compact-verify.mjs ci` は、同じ検証に続けてデスクトップとインストーラーをビルドし、サーバーとデスクトップの両バイナリにCompact画面が含まれることを検査します。CIは `.github/workflows/compact-reva.yml` です。
-
-専用E2Eだけを実行する場合は `node scripts/compact-verify.mjs build-server` の後、`npm --prefix frontend run test:e2e -- --config playwright.compact.config.ts` を使います。対象は `frontend/tests/compact-e2e/` のみで、Fork元の `frontend/tests/e2e/` を収集しません。既存サーバーを再利用せず、起動前にバイナリ内のCompact資産を検査し、実行中もCompact画面・Canvas PNG・480×320クリップを検証します。テストごとに一時設定・隔離したローカル記録・制御可能なHubを使い、専用サーバーを停止して再起動保持も確認します。ページ巡回は実時間の10秒固定です。Serial送信・通常JPEG破棄・離席黒画面・復帰・停止時RESETは `internal/compact` のGoテストで検証します。ブラウザーE2Eは実機送信や実Hubの完成系監査の代わりにはしません。
-
-Fork元の標準CI（`Windows checks`）と専用CIは別の検証です。標準の `node scripts/run.mjs ci` は従来9.2インチ画面向けE2Eを実行するため、Compact UIでは失敗し得ます。専用CIの合格だけで全CI合格とは扱わず、main切替前に標準CIの扱いについて利用者の合意が必要です。Compactでは `build/app.json` の更新元とビルド時の更新元・公開鍵の指定を起動時に無効化し、自動更新を実行しません。
-
 作業ディレクトリはリポジトリのルートです。Go 1.25以上、`.nvmrc` と一致する Node.js、Python 3、WebView2 Runtime を用意します。インストーラーの作成には NSIS 3.11以上も必要です。
 
 段階5の起動環境は [エージェント行動指針](../AGENTS.md) に従います。ゲージ配置の完成系監査では、インストール済みアプリを終了してから、保存済みの実 Hub 接続設定を監査用ディレクトリへ複製し、今回の変更を含むデスクトップアプリを起動します。
