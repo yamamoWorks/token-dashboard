@@ -7,6 +7,7 @@
 | フォルダー | 描画寸法 | データ構成 |
 | --- | --- | --- |
 | `sample-midnight-35-landscape` | 480×320 | `service-gauges` |
+| `gauges-35-landscape-large` | 480×320 | `service-gauges` |
 | `sample-paper-35-portrait` | 320×480 | `service-bars` |
 | `sample-terminal-35-landscape` | 480×320 | `service-bars` |
 | `sample-orbit-35-portrait` | 320×480 | `service-gauges` |
@@ -46,3 +47,13 @@ Barsの`windows[]`は最大3件です。枠は`label`、`percentText`、`resetTe
 ページ分割、表示対象、巡回はアプリが決めます。テーマは受け取ったページを描きます。
 JavaScript、別フォルダーのファイル、外部URLを必要とするスタイルは定義しません。
 取り込み元を後から変更しても内部コピーは変わらないため、変更を反映するには別スタイルへ切り替え、削除してから再取り込みします。
+
+## 大きなゲージの横向きスタイル
+
+`gauges-35-landscape-large` は組み込みの `Gauges 3.5" Landscape` をもとに、文字サイズを約20%拡大し、ゲージを空き領域に応じて拡大した独立スタイルです。配色、データ項目、ページ切り替えの仕様は元のスタイルに従います。
+
+- TokensとLimitsを併記する場合は、ゲージ1個を202px、2個を各114px、3個を各80pxの目安で表示します。
+- Limitsのみの場合は、ゲージ1個を206px、2個を各202px、3個を各144pxの目安で表示します。
+- 480×320の固定レイアウトです。トークンの桁数、サービス名、契約名などによっては、アプリ上での表示確認が必要です。
+
+取り込みには `gauges-35-landscape-large` フォルダーを選択します。組み込みスタイルには変更を加えません。
