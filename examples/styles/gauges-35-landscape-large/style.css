@@ -50,8 +50,8 @@ body {
 .percentage span { font-size: 30px; color: #a5a6b2; font-weight: 600; }
 .circle-meta { text-align: center; min-width: 0; }
 .group-name { display: block; font-size: 13.2px; line-height: 1.1; overflow-wrap: anywhere; }
-.reset-row { display: flex; justify-content: center; align-items: center; gap: 3px; font-size: 12px; color: #a5a6b2; white-space: nowrap; line-height: 1.2; }
-.reset-row > span:first-child { font-size: 22.5px; font-weight: 700; line-height: 1; }
+.reset-row { display: flex; justify-content: center; align-items: center; gap: 2px; font-size: 12px; color: #a5a6b2; white-space: nowrap; line-height: 1.2; }
+.reset-row > span:first-child, .reset-row > span:last-child { font-size: 22.5px; font-weight: 700; line-height: 1; }
 .clock { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.2; flex: 0 0 12px; }
 
 /* With service totals: one gauge can use most of the remaining height. */
@@ -61,11 +61,11 @@ body {
 .landscape .service-body[data-both="true"] .circles[data-count="2"] { flex-direction: column; gap: 2px; }
 .landscape .service-body[data-both="true"] .circles[data-count="2"] .circle {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 112px minmax(0, 1fr);
   gap: 4px;
   width: 100%;
 }
-.landscape .service-body[data-both="true"] .circles[data-count="2"] .gauge { width: 120px; }
+.landscape .service-body[data-both="true"] .circles[data-count="2"] .gauge { width: 112px; }
 
 /* Three gauges are arranged in two rows, with the third centered. */
 .landscape .service-body[data-both="true"] .circles[data-count="3"] {
@@ -82,7 +82,8 @@ body {
 .landscape .service-body[data-both="true"] .circles[data-count="3"] .gauge { width: min(100%, 80px); }
 .landscape .service-body[data-both="true"] .circles[data-count="3"] .group-name { font-size: 12px; }
 .landscape .service-body[data-both="true"] .circles[data-count="3"] .reset-row { font-size: 10.8px; line-height: 1.05; gap: 2px; }
-.landscape .service-body[data-both="true"] .circles[data-count="3"] .reset-row > span:first-child { font-size: 18px; }
+.landscape .service-body[data-both="true"] .circles[data-count="3"] .reset-row > span:first-child,
+.landscape .service-body[data-both="true"] .circles[data-count="3"] .reset-row > span:last-child { font-size: 18px; }
 .landscape .service-body[data-both="true"] .circles[data-count="3"] .clock { width: 11px; height: 11px; flex-basis: 11px; }
 
 /* Limits only: do not retain the 124px limit from the standard style. */
