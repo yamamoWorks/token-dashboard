@@ -1,0 +1,89 @@
+/* Enlarged 480 x 320 service-gauges style. Standalone: no imports or scripts. */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  width: 480px;
+  height: 320px;
+  font-family: "Yu Gothic", sans-serif;
+  background: #10131b;
+  color: #e4e5e9;
+}
+.service-display {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  background: #10131b;
+}
+.page-head { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+.service-icon, .service-initial { width: 31px; height: 31px; flex: 0 0 31px; border-radius: 6px; }
+.service-initial { background: #7466e0; text-align: center; line-height: 31px; font-weight: 700; font-size: 19.2px; }
+.service-name { font-size: 19.2px; line-height: 1.15; overflow-wrap: anywhere; flex: 1; min-width: 0; }
+.plan { font-size: 13.2px; color: #a5a6b2; max-width: 32%; overflow-wrap: anywhere; }
+.service-body { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; min-height: 0; }
+.landscape .service-body[data-both="true"] { grid-template-columns: 43% minmax(0, 1fr); gap: 8px; }
+.service-tokens { display: flex; flex-direction: column; justify-content: space-around; gap: 4px; min-width: 0; min-height: 0; padding: 8px; border-radius: 10px; background: #181c28; }
+.section-label { color: #aaa1f4; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+.token-period { min-width: 0; }
+.period-line { display: flex; justify-content: space-between; gap: 4px; font-size: 13.2px; color: #adb0be; line-height: 1.3; }
+.token-cost { color: #aaa1f4; font-size: min(14.4px, calc(var(--token-font-size) * 1.2)); white-space: nowrap; }
+.token-value { display: block; text-align: right; white-space: nowrap; font-size: calc(var(--token-font-size) * 1.2); font-weight: 700; line-height: 1.2; letter-spacing: -.5px; }
+.service-body[data-limits="false"] .token-period { padding: 6px 0; }
+.service-body[data-limits="false"] .period-line { font-size: 18px; }
+.service-limits { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0; }
+.empty-limits, .waiting { text-align: center; color: #a5a6b2; font-size: 19.2px; padding: 10px; }
+.waiting { grid-row: 1 / -1; align-self: center; }
+.page-foot { display: flex; justify-content: space-between; font-size: 12px; color: #6f7587; line-height: 1; }
+.circles { display: flex; align-items: center; justify-content: space-evenly; gap: 6px; width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.circle { display: flex; flex: 1 1 0; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 0; min-height: 0; }
+.gauge { display: block; width: min(100%, 206px); flex-shrink: 0; }
+.gauge-track, .gauge-fill { fill: none; stroke-width: 14; stroke-linecap: round; }
+.gauge-track { stroke: #2b3042; }
+.gauge-fill { stroke: #7466e0; }
+.gauge-fill.tone-warning { stroke: #fab219; }
+.gauge-fill.tone-danger { stroke: #f0616d; }
+.percentages { color: #e4e5e9; text-align: center; }
+.percentage { display: flex; align-items: baseline; justify-content: center; gap: 4px; line-height: 1.1; }
+.percentage strong { font-size: 42px; font-weight: 700; }
+.percentage span { font-size: 24px; color: #a5a6b2; }
+.circle-meta { text-align: center; min-width: 0; }
+.group-name { display: block; font-size: 13.2px; line-height: 1.1; overflow-wrap: anywhere; }
+.reset-row { display: flex; justify-content: center; align-items: center; gap: 3px; font-size: 12px; color: #a5a6b2; white-space: nowrap; line-height: 1.2; }
+.clock { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.2; flex: 0 0 12px; }
+
+/* With service totals: one gauge can use most of the remaining height. */
+.landscape .service-body[data-both="true"] .circles[data-count="1"] .gauge { width: min(100%, 202px); }
+
+/* With service totals: two gauges use two rows with reset information alongside. */
+.landscape .service-body[data-both="true"] .circles[data-count="2"] { flex-direction: column; gap: 2px; }
+.landscape .service-body[data-both="true"] .circles[data-count="2"] .circle {
+  display: grid;
+  grid-template-columns: 114px minmax(0, 1fr);
+  gap: 4px;
+  width: 100%;
+}
+.landscape .service-body[data-both="true"] .circles[data-count="2"] .gauge { width: 114px; }
+
+/* Three gauges are arranged in two rows, with the third centered. */
+.landscape .service-body[data-both="true"] .circles[data-count="3"] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+}
+.landscape .service-body[data-both="true"] .circles[data-count="3"] .circle:last-child {
+  grid-column: 1 / -1;
+  width: 50%;
+  justify-self: center;
+}
+.landscape .service-body[data-both="true"] .circles[data-count="3"] .gauge { width: min(100%, 80px); }
+.landscape .service-body[data-both="true"] .circles[data-count="3"] .group-name { font-size: 12px; }
+.landscape .service-body[data-both="true"] .circles[data-count="3"] .reset-row { font-size: 10.8px; line-height: 1.05; gap: 2px; }
+.landscape .service-body[data-both="true"] .circles[data-count="3"] .clock { width: 11px; height: 11px; flex-basis: 11px; }
+
+/* Limits only: do not retain the 124px limit from the standard style. */
+.landscape .service-body[data-both="false"] .circles[data-count="1"] .gauge { width: min(100%, 206px); }
+.landscape .service-body[data-both="false"] .circles[data-count="2"] .gauge { width: min(100%, 202px); }
+.landscape .service-body[data-both="false"] .circles[data-count="3"] .gauge { width: min(100%, 144px); }
