@@ -44,10 +44,10 @@ body {
 .gauge-fill { stroke: #7466e0; }
 .gauge-fill.tone-warning { stroke: #fab219; }
 .gauge-fill.tone-danger { stroke: #f0616d; }
-.percentages { color: #e4e5e9; text-align: center; padding: 10px 8px 0; }
-.percentage { display: flex; align-items: baseline; justify-content: center; gap: 8px; line-height: 1.08; }
-.percentage strong { font-size: 28px; font-weight: 700; }
-.percentage span { font-size: 30px; color: #a5a6b2; font-weight: 600; }
+.percentages { color: #e4e5e9; text-align: center; padding: 0 8px; transform: translateY(7px); }
+.percentage { display: flex; align-items: baseline; justify-content: center; gap: 0; line-height: .85; }
+.percentage strong { font-size: 18px; font-weight: 700; }
+.percentage span { font-size: 45px; color: #a5a6b2; font-weight: 600; }
 .circle-meta { text-align: center; min-width: 0; }
 .group-name { display: block; font-size: 13.2px; line-height: 1.1; overflow-wrap: anywhere; }
 .reset-row { display: flex; justify-content: center; align-items: center; gap: 3px; font-size: 12px; color: #a5a6b2; white-space: nowrap; line-height: 1.2; }
