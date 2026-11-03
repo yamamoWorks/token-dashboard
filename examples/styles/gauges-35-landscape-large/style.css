@@ -60,11 +60,11 @@ body {
 .landscape .service-body[data-both="true"] .circles[data-count="2"] { flex-direction: column; gap: 2px; }
 .landscape .service-body[data-both="true"] .circles[data-count="2"] .circle {
   display: grid;
-  grid-template-columns: 114px minmax(0, 1fr);
+  grid-template-columns: 120px minmax(0, 1fr);
   gap: 4px;
   width: 100%;
 }
-.landscape .service-body[data-both="true"] .circles[data-count="2"] .gauge { width: 114px; }
+.landscape .service-body[data-both="true"] .circles[data-count="2"] .gauge { width: 120px; }
 
 /* Three gauges are arranged in two rows, with the third centered. */
 .landscape .service-body[data-both="true"] .circles[data-count="3"] {
@@ -84,6 +84,6 @@ body {
 .landscape .service-body[data-both="true"] .circles[data-count="3"] .clock { width: 11px; height: 11px; flex-basis: 11px; }
 
 /* Limits only: do not retain the 124px limit from the standard style. */
-.landscape .service-body[data-both="false"] .circles[data-count="1"] .gauge { width: min(100%, 206px); }
-.landscape .service-body[data-both="false"] .circles[data-count="2"] .gauge { width: min(100%, 202px); }
+.landscape .service-body[data-both="false"] .circles[data-count="1"] .gauge { width: min(100%, 203px); }
+.landscape .service-body[data-both="false"] .circles[data-count="2"] .gauge { width: min(100%, 203px); }
 .landscape .service-body[data-both="false"] .circles[data-count="3"] .gauge { width: min(100%, 144px); }
