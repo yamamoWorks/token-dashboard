@@ -1,0 +1,10 @@
+{
+  "formatVersion": 1,
+  "id": "gauges-35-landscape-large",
+  "name": "Gauges 3.5\" Landscape Large",
+  "width": 480,
+  "height": 320,
+  "dataLayout": "service-gauges",
+  "template": "template.hbs",
+  "stylesheet": "style.css"
+}
