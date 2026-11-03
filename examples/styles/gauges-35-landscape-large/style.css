@@ -44,14 +44,14 @@ body {
 .gauge-fill { stroke: #7466e0; }
 .gauge-fill.tone-warning { stroke: #fab219; }
 .gauge-fill.tone-danger { stroke: #f0616d; }
-.percentages { color: #e4e5e9; text-align: center; padding: 0 8px; transform: translateY(7px); }
-.percentage { display: flex; align-items: baseline; justify-content: center; gap: 0; line-height: .85; }
-.percentage strong { font-size: 18px; font-weight: 700; }
-.percentage span { font-size: 45px; color: #a5a6b2; font-weight: 600; }
+.percentages { color: #e4e5e9; text-align: center; padding: 10px 8px 0; }
+.percentage { display: flex; align-items: baseline; justify-content: center; gap: 8px; line-height: 1.08; }
+.percentage strong { font-size: 28px; font-weight: 700; }
+.percentage span { font-size: 30px; color: #a5a6b2; font-weight: 600; }
 .circle-meta { text-align: center; min-width: 0; }
 .group-name { display: block; font-size: 13.2px; line-height: 1.1; overflow-wrap: anywhere; }
 .reset-row { display: flex; justify-content: center; align-items: center; gap: 3px; font-size: 12px; color: #a5a6b2; white-space: nowrap; line-height: 1.2; }
-.reset-row > span:first-child { font-size: 15px; font-weight: 700; }
+.reset-row > span:first-child { font-size: 22.5px; font-weight: 700; line-height: 1; }
 .clock { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.2; flex: 0 0 12px; }
 
 /* With service totals: one gauge can use most of the remaining height. */
@@ -82,7 +82,7 @@ body {
 .landscape .service-body[data-both="true"] .circles[data-count="3"] .gauge { width: min(100%, 80px); }
 .landscape .service-body[data-both="true"] .circles[data-count="3"] .group-name { font-size: 12px; }
 .landscape .service-body[data-both="true"] .circles[data-count="3"] .reset-row { font-size: 10.8px; line-height: 1.05; gap: 2px; }
-.landscape .service-body[data-both="true"] .circles[data-count="3"] .reset-row > span:first-child { font-size: 12px; }
+.landscape .service-body[data-both="true"] .circles[data-count="3"] .reset-row > span:first-child { font-size: 18px; }
 .landscape .service-body[data-both="true"] .circles[data-count="3"] .clock { width: 11px; height: 11px; flex-basis: 11px; }
 
 /* Limits only: do not retain the 124px limit from the standard style. */
